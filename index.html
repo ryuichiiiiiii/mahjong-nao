@@ -465,19 +465,12 @@ fieldset{border:none;padding:0;margin:0;}
           <input type="number" id="rate" value="1000" step="100" min="1">
         </div>
         <div class="field">
-          <label for="tobiAmount">飛び賞(Nao)</label>
-          <input type="number" id="tobiAmount" value="10" step="1">
+          <label for="tobiAmount">飛び失点(点・1人あたり)</label>
+          <input type="number" id="tobiAmount" value="10000" step="1000">
         </div>
         <div class="field">
-          <label for="tobiTarget">飛び賞の受取</label>
-          <select id="tobiTarget">
-            <option value="top">トップ総取り</option>
-            <option value="split">他家で山分け</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="yakitoriAmount">焼き鳥料(Nao)</label>
-          <input type="number" id="yakitoriAmount" value="5" step="1">
+          <label for="yakitoriAmount">焼き鳥失点(点・1人あたり)</label>
+          <input type="number" id="yakitoriAmount" value="10000" step="1000">
         </div>
       </div>
       <div class="rules-grid" style="margin-top:.2rem;">
@@ -491,7 +484,7 @@ fieldset{border:none;padding:0;margin:0;}
           </div>
         </div>
       </div>
-      <div class="hint">素点 = その半荘終了時の卓上点数。焼き鳥は「その半荘で一度も和了できなかった」プレイヤーにチェック。焼き鳥料は山分けで他3家へ均等に支払われます。ルールは半荘を記録するたびに現在の設定で計算され、以後の集計にも遡って適用されます。</div>
+      <div class="hint">素点 = その半荘終了時の卓上点数。飛びは0点未満になったプレイヤーにチェック。焼き鳥は「その半荘で一度も和了できなかった」プレイヤーにチェック。どちらも該当プレイヤーが他の3人それぞれに設定した点数(レート換算)を個別に支払います(3人合計では3倍)。ルールは半荘を記録するたびに現在の設定で計算され、以後の集計にも遡って適用されます。</div>
       <div class="warn" id="umaWarn">順位点の合計が 0 になっていません。ゼロサムにするには4つの値の合計を0にしてください。</div>
     </div>
   </details>
@@ -563,9 +556,8 @@ const STORAGE_KEY = 'jansou-nao-state-v1';
 const DEFAULT_CONFIG = {
   basePoint: 25000,
   rate: 1000,
-  tobiAmount: 10,
-  tobiTarget: 'top',
-  yakitoriAmount: 5,
+  tobiAmount: 10000,
+  yakitoriAmount: 10000,
   uma: [10, 5, -5, -10],
 };
 const DEFAULT_PLAYERS = ['プレイヤー1', 'プレイヤー2', 'プレイヤー3', 'プレイヤー4'];
@@ -628,7 +620,7 @@ function encodeShareState(){
   const c = state.config;
   const riderIndex = new Map(state.riders.map((r,i) => [r.id, i]));
   const compact = {
-    c: [c.basePoint, c.rate, c.tobiAmount, c.tobiTarget === 'split' ? 1 : 0, c.yakitoriAmount, ...c.uma],
+    c: [c.basePoint, c.rate, c.tobiAmount, c.yakitoriAmount, ...c.uma],
     p: state.players,
     r: state.riders.map(r => r.name),
     h: state.history.map(e => {
@@ -653,9 +645,8 @@ function decodeShareState(str){
   return {
     config: {
       basePoint: c[0], rate: c[1], tobiAmount: c[2],
-      tobiTarget: c[3] ? 'split' : 'top',
-      yakitoriAmount: c[4],
-      uma: [c[5], c[6], c[7], c[8]],
+      yakitoriAmount: c[3],
+      uma: [c[4], c[5], c[6], c[7]],
     },
     players: compact.p,
     current: DEFAULT_CURRENT(),
@@ -691,31 +682,30 @@ function computeRound(cfg, roundInputs){
   const base = roundInputs.map(r => (r.score - cfg.basePoint) / cfg.rate);
   const uma = roundInputs.map((r,i) => cfg.uma[rankOf[i]] || 0);
 
+  // tobi/yakitori: the flagged player pays the full per-opponent amount
+  // (converted from points via the rate) to EACH of the other 3 players
+  // individually, not a pooled/split total.
   const tobiAdj = new Array(n).fill(0);
-  const busted = roundInputs.map(r => r.tobi);
-  const bustedCount = busted.filter(Boolean).length;
-  if(bustedCount > 0 && cfg.tobiAmount !== 0){
-    const topIdx = order[0];
-    roundInputs.forEach((r,i) => { if(r.tobi) tobiAdj[i] -= cfg.tobiAmount; });
-    const pool = bustedCount * cfg.tobiAmount;
-    if(cfg.tobiTarget === 'top'){
-      tobiAdj[topIdx] += pool;
-    } else {
-      const receivers = roundInputs.map((r,i)=>i).filter(i => !busted[i]);
-      if(receivers.length > 0){
-        receivers.forEach(i => { tobiAdj[i] += pool / receivers.length; });
-      } else {
-        tobiAdj[topIdx] += pool;
-      }
+  const tobiEach = cfg.tobiAmount / cfg.rate;
+  roundInputs.forEach((r,i) => {
+    if(r.tobi && tobiEach !== 0){
+      const others = roundInputs.map((_,j)=>j).filter(j => j !== i);
+      others.forEach(j => {
+        tobiAdj[i] -= tobiEach;
+        tobiAdj[j] += tobiEach;
+      });
     }
-  }
+  });
 
   const yakitoriAdj = new Array(n).fill(0);
+  const yakitoriEach = cfg.yakitoriAmount / cfg.rate;
   roundInputs.forEach((r,i) => {
-    if(r.yakitori && cfg.yakitoriAmount !== 0){
+    if(r.yakitori && yakitoriEach !== 0){
       const others = roundInputs.map((_,j)=>j).filter(j => j !== i);
-      yakitoriAdj[i] -= cfg.yakitoriAmount;
-      others.forEach(j => { yakitoriAdj[j] += cfg.yakitoriAmount / others.length; });
+      others.forEach(j => {
+        yakitoriAdj[i] -= yakitoriEach;
+        yakitoriAdj[j] += yakitoriEach;
+      });
     }
   });
 
@@ -918,7 +908,6 @@ function readConfigFromInputs(){
     basePoint: Number(document.getElementById('basePoint').value) || 0,
     rate: Number(document.getElementById('rate').value) || 1000,
     tobiAmount: Number(document.getElementById('tobiAmount').value) || 0,
-    tobiTarget: document.getElementById('tobiTarget').value,
     yakitoriAmount: Number(document.getElementById('yakitoriAmount').value) || 0,
     uma: [1,2,3,4].map(n => Number(document.getElementById('uma'+n).value) || 0),
   };
@@ -928,12 +917,11 @@ function writeConfigToInputs(){
   document.getElementById('basePoint').value = c.basePoint;
   document.getElementById('rate').value = c.rate;
   document.getElementById('tobiAmount').value = c.tobiAmount;
-  document.getElementById('tobiTarget').value = c.tobiTarget;
   document.getElementById('yakitoriAmount').value = c.yakitoriAmount;
   c.uma.forEach((v,i) => { document.getElementById('uma'+(i+1)).value = v; });
 }
 
-['basePoint','rate','tobiAmount','tobiTarget','yakitoriAmount','uma1','uma2','uma3','uma4'].forEach(id => {
+['basePoint','rate','tobiAmount','yakitoriAmount','uma1','uma2','uma3','uma4'].forEach(id => {
   document.getElementById(id).addEventListener('input', () => { readConfigFromInputs(); saveLocal(); render(); });
   document.getElementById(id).addEventListener('change', () => { readConfigFromInputs(); saveLocal(); render(); });
 });
