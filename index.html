@@ -106,17 +106,16 @@ header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:1
 .icon-btn.ghost{background:transparent;}
 .icon-btn.small{padding:.35rem .7rem;font-size:.72rem;}
 
-/* view banner */
-.view-banner{
-  background:var(--lacquer-soft);
-  border:1px solid var(--lacquer);
-  border-radius:12px;
-  padding:.9rem 1.1rem;
-  display:flex;gap:.7rem;align-items:center;flex-wrap:wrap;
-  font-size:.85rem;
+/* sync status */
+.sync-badge{
+  font-size:.72rem;
+  color:var(--ink-muted);
+  display:flex;align-items:center;gap:.3rem;
+  white-space:nowrap;
 }
-.view-banner .msg{flex:1;min-width:200px;}
-.view-banner strong{display:block;margin-bottom:.15rem;}
+.sync-badge.online{color:#2f7a52;}
+:root[data-theme="dark"] .sync-badge.online{color:#8fd6b3;}
+.sync-badge.offline{color:var(--lacquer);}
 
 /* leaderboard */
 .board{
@@ -464,14 +463,11 @@ fieldset{border:none;padding:0;margin:0;}
         <span class="sub">素点・順位点・飛び・焼き鳥を Nao 単位でまとめる 4人打ち精算表</span>
       </div>
     </div>
-    <button class="icon-btn" id="themeBtn" type="button">◐ 表示切替</button>
+    <div style="display:flex;align-items:center;gap:.6rem;">
+      <span class="sync-badge" id="syncBadge">● 接続中…</span>
+      <button class="icon-btn" id="themeBtn" type="button">◐ 表示切替</button>
+    </div>
   </header>
-
-  <div class="view-banner" id="viewBanner" style="display:none;">
-    <span class="msg"><strong>共有された成績を閲覧中です</strong>この端末では入力・記録はできません。</span>
-    <button class="icon-btn primary small" id="importBtn" type="button">この端末に取り込んで編集する</button>
-    <button class="icon-btn small" id="dismissBtn" type="button">元のデータに戻る</button>
-  </div>
 
   <section class="board">
     <div class="board-head">
@@ -572,15 +568,15 @@ fieldset{border:none;padding:0;margin:0;}
   <section class="share-wrap">
     <h2>共有</h2>
     <div class="share-bar">
-      <button class="icon-btn primary" id="shareBtn" type="button">🔗 共有リンクを作成</button>
-      <span class="hint" style="margin:0;">最新の合計・履歴を含むリンクを作成します。開いた相手には閲覧専用で表示されます。</span>
+      <button class="icon-btn primary" id="shareBtn" type="button">🔗 このページのURLを共有</button>
+      <span class="hint" style="margin:0;">このURLを開けば誰でも同じ内容がリアルタイムに反映されます。記録するたびに送り直す必要はありません。</span>
     </div>
     <div class="share-output" id="shareOutput" style="display:none;">
       <input type="text" id="shareLinkInput" readonly>
       <button class="icon-btn small" id="copyBtn" type="button">コピー</button>
     </div>
     <div class="danger-row">
-      <button class="danger-link" id="resetAllBtn" type="button">全データを削除してやり直す</button>
+      <button class="danger-link" id="resetAllBtn" type="button">全データを削除してやり直す(全員に反映されます)</button>
     </div>
   </section>
 
@@ -589,8 +585,20 @@ fieldset{border:none;padding:0;margin:0;}
 
 <div class="toast" id="toast"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script>
 const STORAGE_KEY = 'jansou-nao-state-v1';
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCOtNltDEDSIYzrnthHrFV8x6tpu-LKJvg",
+  authDomain: "mahjong-nao.firebaseapp.com",
+  databaseURL: "https://mahjong-nao-default-rtdb.firebaseio.com",
+  projectId: "mahjong-nao",
+  storageBucket: "mahjong-nao.firebasestorage.app",
+  messagingSenderId: "1042541097694",
+  appId: "1:1042541097694:web:20798a393cb805eefb084f"
+};
 
 const DEFAULT_CONFIG = {
   basePoint: 25000,
@@ -659,9 +667,8 @@ function rosterNameOf(id){
   return r ? r.name : '(不明)';
 }
 
-// ---------- persistence ----------
-function saveLocal(){
-  if(viewOnly) return;
+// ---------- persistence (localStorage cache) ----------
+function persistLocal(){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
 }
 function loadLocal(){
@@ -677,73 +684,85 @@ function loadLocal(){
   return false;
 }
 
-// ---------- share encode/decode ----------
-function b64urlEncode(str){
-  const b64 = btoa(unescape(encodeURIComponent(str)));
-  return b64.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-}
-function b64urlDecode(str){
-  let b64 = str.replace(/-/g,'+').replace(/_/g,'/');
-  while(b64.length % 4) b64 += '=';
-  return decodeURIComponent(escape(atob(b64)));
-}
-function encodeShareState(){
-  const c = state.config;
-  const rosterIndex = new Map(state.roster.map((r,i) => [r.id, i]));
-  const compact = {
-    c: [c.basePoint, c.rate, c.tobiAmount, c.yakitoriAmount, ...c.uma],
-    m: state.roster.map(r => r.name),
-    h: state.history.map(e => {
-      const seatIdx = e.seatIds.map(id => rosterIndex.has(id) ? rosterIndex.get(id) : 0);
-      const row = [
-        e.at,
-        e.scores[0], e.scores[1], e.scores[2], e.scores[3],
-        (e.tobi[0]?1:0) | (e.tobi[1]?2:0) | (e.tobi[2]?4:0) | (e.tobi[3]?8:0),
-        (e.yakitori[0]?1:0) | (e.yakitori[1]?2:0) | (e.yakitori[2]?4:0) | (e.yakitori[3]?8:0),
-        seatIdx[0], seatIdx[1], seatIdx[2], seatIdx[3],
-      ];
-      const activeRiders = (e.riders || []).filter(rr => rosterIndex.has(rr.riderId));
-      row.push(activeRiders.length);
-      activeRiders.forEach(rr => { row.push(rosterIndex.get(rr.riderId), rr.target); });
-      return row;
-    }),
-  };
-  return b64urlEncode(JSON.stringify(compact));
-}
-function decodeShareState(str){
-  const compact = JSON.parse(b64urlDecode(str));
-  const c = compact.c;
-  const roster = (compact.m || []).map(name => ({ id: uid(), name, active: true }));
+// ---------- live sync (Firebase Realtime Database) ----------
+// Only the shared fields (config/roster/seatAssignment/history) are synced;
+// the in-progress "current" hanchan entry stays local until recorded, so a
+// remote update never clobbers whatever you're mid-typing.
+const hasFirebase = typeof firebase !== 'undefined';
+let db = null;
+let stateRef = null;
+let firebaseReady = false;
+let lastSyncedJSON = null;
+let pushTimer = null;
+
+function sharedSlice(){
   return {
-    config: {
-      basePoint: c[0], rate: c[1], tobiAmount: c[2],
-      yakitoriAmount: c[3],
-      uma: [c[4], c[5], c[6], c[7]],
-    },
-    roster,
-    seatAssignment: roster.slice(0,4).map(r => r.id),
-    current: DEFAULT_CURRENT(),
-    currentRiders: {},
-    history: compact.h.map(row => {
-      const seatIds = [row[7], row[8], row[9], row[10]].map(idx => roster[idx] ? roster[idx].id : uid());
-      const riderCount = row[11] || 0;
-      const riders = [];
-      for(let k = 0; k < riderCount; k++){
-        const rIdx = row[12 + k*2];
-        const target = row[13 + k*2];
-        if(roster[rIdx]) riders.push({ riderId: roster[rIdx].id, target });
-      }
-      return {
-        id: uid(),
-        at: row[0],
-        scores: [row[1], row[2], row[3], row[4]],
-        tobi: [!!(row[5]&1), !!(row[5]&2), !!(row[5]&4), !!(row[5]&8)],
-        yakitori: [!!(row[6]&1), !!(row[6]&2), !!(row[6]&4), !!(row[6]&8)],
-        seatIds,
-        riders,
-      };
-    }),
+    config: state.config,
+    roster: state.roster,
+    seatAssignment: state.seatAssignment,
+    history: state.history,
   };
+}
+function saveLocal(){
+  persistLocal();
+  schedulePush();
+}
+function schedulePush(){
+  if(!hasFirebase) return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(pushRemote, 400);
+}
+function pushRemote(){
+  if(!hasFirebase || !stateRef) return;
+  const payload = sharedSlice();
+  const json = JSON.stringify(payload);
+  if(json === lastSyncedJSON) return;
+  lastSyncedJSON = json;
+  stateRef.set(payload).catch(()=>{});
+}
+function setSyncBadge(status){
+  const el = document.getElementById('syncBadge');
+  if(!el) return;
+  el.classList.remove('online','offline');
+  if(status === 'online'){ el.textContent = '● 同期中'; el.classList.add('online'); }
+  else if(status === 'offline'){ el.textContent = '○ オフライン(この端末のみ)'; el.classList.add('offline'); }
+  else { el.textContent = '● 接続中…'; }
+}
+function initFirebaseSync(){
+  if(!hasFirebase){ setSyncBadge('offline'); return; }
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.database();
+    stateRef = db.ref('sharedState');
+  }catch(e){ setSyncBadge('offline'); return; }
+
+  db.ref('.info/connected').on('value', (snap) => {
+    setSyncBadge(snap.val() ? 'online' : 'offline');
+  });
+
+  stateRef.on('value', (snap) => {
+    firebaseReady = true;
+    const remote = snap.val();
+    if(!remote){
+      // nothing saved yet anywhere: seed the database with our current state
+      pushRemote();
+      return;
+    }
+    const json = JSON.stringify(remote);
+    if(json === lastSyncedJSON) return; // this is just our own write echoing back
+    lastSyncedJSON = json;
+    state.config = remote.config || state.config;
+    state.roster = Array.isArray(remote.roster) ? remote.roster : state.roster;
+    state.seatAssignment = Array.isArray(remote.seatAssignment) ? remote.seatAssignment : state.seatAssignment;
+    state.history = Array.isArray(remote.history) ? remote.history : state.history;
+    normalizeState(state);
+    persistLocal();
+    writeConfigToInputs();
+    buildRosterRows();
+    buildSeats();
+    buildRiderRows();
+    render();
+  });
 }
 
 // ---------- calculation ----------
@@ -860,7 +879,6 @@ const totalSettleListEl = document.getElementById('totalSettleList');
 const historyBody = document.getElementById('historyBody');
 const historyEmpty = document.getElementById('historyEmpty');
 const historyTable = document.getElementById('historyTable');
-const viewBanner = document.getElementById('viewBanner');
 const toastEl = document.getElementById('toast');
 const riderRowsEl = document.getElementById('riderRows');
 const rosterRowsEl = document.getElementById('rosterRows');
@@ -1223,7 +1241,6 @@ function applyViewOnlyLock(){
     '#seats select, #seats input, #rosterPanel input, #rosterPanel button, #rulesPanel input, #rulesPanel select, #recordBtn, #resetAllBtn, #riderRows select'
   );
   controls.forEach(el => { el.disabled = viewOnly; });
-  viewBanner.style.display = viewOnly ? 'flex' : 'none';
 }
 
 // ---------- record ----------
@@ -1267,8 +1284,7 @@ const shareLinkInput = document.getElementById('shareLinkInput');
 const copyBtn = document.getElementById('copyBtn');
 
 function buildShareUrl(){
-  const base = location.origin + location.pathname + location.search;
-  return base + '#s=' + encodeShareState();
+  return location.origin + location.pathname;
 }
 async function copyText(text){
   try{
@@ -1287,40 +1303,12 @@ shareBtn.addEventListener('click', async () => {
     }catch(e){ /* user cancelled or unsupported, fall through to copy */ }
   }
   const ok = await copyText(url);
-  toast(ok ? 'リンクをコピーしました' : 'リンクを作成しました(コピーは手動で行ってください)');
+  toast(ok ? 'URLをコピーしました' : 'URLを表示しました(コピーは手動で行ってください)');
 });
 copyBtn.addEventListener('click', async () => {
   shareLinkInput.select();
   const ok = await copyText(shareLinkInput.value);
   toast(ok ? 'コピーしました' : 'コピーできませんでした。手動で選択してください');
-});
-
-// ---------- view banner ----------
-document.getElementById('importBtn').addEventListener('click', () => {
-  viewOnly = false;
-  history.replaceState(null, '', location.pathname + location.search);
-  saveLocal();
-  applyViewOnlyLock();
-  writeConfigToInputs();
-  buildRosterRows();
-  buildSeats();
-  buildRiderRows();
-  render();
-  toast('この端末のデータとして取り込みました');
-});
-document.getElementById('dismissBtn').addEventListener('click', () => {
-  history.replaceState(null, '', location.pathname + location.search);
-  const hadLocal = loadLocal();
-  if(!hadLocal){
-    state = freshState();
-  }
-  viewOnly = false;
-  applyViewOnlyLock();
-  writeConfigToInputs();
-  buildRosterRows();
-  buildSeats();
-  buildRiderRows();
-  render();
 });
 
 // ---------- reset ----------
@@ -1352,23 +1340,14 @@ themeBtn.addEventListener('click', () => {
 
 // ---------- init ----------
 function init(){
-  const hash = location.hash;
-  if(hash.startsWith('#s=')){
-    try{
-      state = decodeShareState(hash.slice(3));
-      viewOnly = true;
-    }catch(e){
-      loadLocal();
-    }
-  } else {
-    loadLocal();
-  }
+  loadLocal();
   writeConfigToInputs();
   applyViewOnlyLock();
   buildRosterRows();
   buildSeats();
   buildRiderRows();
   render();
+  initFirebaseSync();
 }
 init();
 </script>
