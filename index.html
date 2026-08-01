@@ -546,7 +546,7 @@ fieldset{border:none;padding:0;margin:0;}
       <h2>乗っかり</h2>
     </div>
     <div id="riderRows"></div>
-    <div class="hint">今回対局していないメンバーが、4人のうち誰かに乗っかれます。乗った相手の今回のNaoをそのまま受け取り/支払いし、その分は乗った相手以外の3人が均等に負担・受取します。5人目以降のメンバーは上の「メンバー管理」で登録してください。</div>
+    <div class="hint">今回対局していないメンバーが、4人のうち誰かに乗っかれます。乗った相手の今回のNaoをそのまま受け取り/支払いし、その分は乗った相手以外の3人のうち負けている人が、負け幅の大きさに応じて多く負担します(勝っている人の負担は0)。誰も負けていない場合は均等割りになります。5人目以降のメンバーは上の「メンバー管理」で登録してください。</div>
   </section>
 
   <div class="results">
@@ -789,15 +789,22 @@ function computeRound(cfg, roundInputs){
 }
 
 // riders: array of {id, name, target(0-3)}. Each rider mirrors the ridden
-// player's Nao result; the cost/gain is funded by the other 3 main players
-// (split evenly), so the ridden player's own result is untouched.
+// player's Nao result; the ridden player's own result is untouched. The
+// cost/gain is funded by the other 3 main players, weighted toward whoever
+// is losing the most this hanchan (players with a positive result bear none
+// of it); if none of the 3 are currently negative, split evenly instead.
 function applyRiders(mainTotals, riders){
   const round2 = x => Math.round(x * 100) / 100;
   const adjustedTotals = mainTotals.slice();
   const riderResults = riders.map(r => {
     const t = mainTotals[r.target];
     const others = [0,1,2,3].filter(i => i !== r.target);
-    others.forEach(i => { adjustedTotals[i] -= t/3; });
+    const weights = others.map(i => Math.max(0, -mainTotals[i]));
+    const weightSum = weights.reduce((a,b) => a+b, 0);
+    others.forEach((i,k) => {
+      const share = weightSum > 0 ? t * weights[k] / weightSum : t/3;
+      adjustedTotals[i] -= share;
+    });
     return { id: r.id, name: r.name, target: r.target, amt: round2(t) };
   });
   for(let i=0;i<adjustedTotals.length;i++) adjustedTotals[i] = round2(adjustedTotals[i]);
