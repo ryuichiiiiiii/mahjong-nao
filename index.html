@@ -471,6 +471,56 @@ fieldset{border:none;padding:0;margin:0;}
     </div>
   </header>
 
+  <section>
+    <div class="section-head">
+      <h2 id="roundTitle">第 1 半荘 入力</h2>
+      <button class="danger-link" id="cancelEditBtn" type="button" style="display:none;">編集をキャンセル</button>
+    </div>
+    <div class="table-area" id="seats" style="margin-top:1rem;"></div>
+    <div class="warn" id="seatWarn" style="margin-top:1rem;">同じメンバーが複数の座席に選ばれています。重複しないよう選び直してください。</div>
+    <div class="warn" id="scoreWarn" style="margin-top:1rem;"></div>
+  </section>
+
+  <section class="riders-wrap">
+    <div class="section-head">
+      <h2>乗っかり</h2>
+    </div>
+    <div id="riderRows"></div>
+    <div class="hint">今回対局していないメンバーが、4人のうち誰かに乗っかれます。乗った相手の今回のNaoをそのまま受け取り/支払いします。乗った相手が勝っていれば、その分は他の3人のうち負けている人が負け幅に応じて多く負担し(勝っている人の負担は0)、乗った相手が負けていれば逆に、他の3人のうち勝っている人が勝ち幅に応じて多く受け取ります(負けている人は関係なし)。該当者がいない場合は均等割りになります。5人目以降のメンバーは上の「メンバー管理」で登録してください。</div>
+  </section>
+
+  <details class="rules" id="rosterPanel">
+    <summary>メンバー管理 <span class="chev">▸</span></summary>
+    <div class="rules-body">
+      <div class="rider-add">
+        <input type="text" id="memberNameInput" placeholder="名前を追加(例: 太郎)">
+        <button class="icon-btn small" id="addMemberBtn" type="button">＋ 追加</button>
+      </div>
+      <div id="rosterRows"></div>
+      <div class="hint">ここに登録した人が、下の「半荘入力」の4人選択と「乗っかり」で選べるようになります。除外しても過去の記録には名前が残ります。</div>
+    </div>
+  </details>
+
+  <div class="results">
+    <h2>今回の精算プレビュー (Nao)</h2>
+    <div class="totals" id="totals"></div>
+    <div class="settle-list" id="settleList"></div>
+    <div class="record-row">
+      <button class="icon-btn primary" id="recordBtn" type="button">この半荘を記録する</button>
+    </div>
+  </div>
+
+  <section class="history-wrap">
+    <h2>履歴</h2>
+    <div class="table-scroll">
+      <table class="history" id="historyTable">
+        <thead><tr><th>#</th><th>日時</th><th>結果</th><th>操作</th></tr></thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+    <div class="history-empty" id="historyEmpty">まだ記録がありません。半荘を入力して「記録する」を押してください。</div>
+  </section>
+
   <section class="board">
     <div class="board-head">
       <h2>本日の成績</h2>
@@ -487,18 +537,6 @@ fieldset{border:none;padding:0;margin:0;}
     </div>
     <div id="leaderboardTotal"></div>
   </section>
-
-  <details class="rules" id="rosterPanel">
-    <summary>メンバー管理 <span class="chev">▸</span></summary>
-    <div class="rules-body">
-      <div class="rider-add">
-        <input type="text" id="memberNameInput" placeholder="名前を追加(例: 太郎)">
-        <button class="icon-btn small" id="addMemberBtn" type="button">＋ 追加</button>
-      </div>
-      <div id="rosterRows"></div>
-      <div class="hint">ここに登録した人が、下の「半荘入力」の4人選択と「乗っかり」で選べるようになります。除外しても過去の記録には名前が残ります。</div>
-    </div>
-  </details>
 
   <details class="rules" id="rulesPanel">
     <summary>ルール設定 <span class="chev">▸</span></summary>
@@ -536,44 +574,6 @@ fieldset{border:none;padding:0;margin:0;}
       <div class="warn" id="umaWarn">順位点の合計が 0 になっていません。ゼロサムにするには4つの値の合計を0にしてください。</div>
     </div>
   </details>
-
-  <section>
-    <div class="section-head">
-      <h2 id="roundTitle">第 1 半荘 入力</h2>
-      <button class="danger-link" id="cancelEditBtn" type="button" style="display:none;">編集をキャンセル</button>
-    </div>
-    <div class="table-area" id="seats" style="margin-top:1rem;"></div>
-    <div class="warn" id="seatWarn" style="margin-top:1rem;">同じメンバーが複数の座席に選ばれています。重複しないよう選び直してください。</div>
-    <div class="warn" id="scoreWarn" style="margin-top:1rem;"></div>
-  </section>
-
-  <section class="riders-wrap">
-    <div class="section-head">
-      <h2>乗っかり</h2>
-    </div>
-    <div id="riderRows"></div>
-    <div class="hint">今回対局していないメンバーが、4人のうち誰かに乗っかれます。乗った相手の今回のNaoをそのまま受け取り/支払いします。乗った相手が勝っていれば、その分は他の3人のうち負けている人が負け幅に応じて多く負担し(勝っている人の負担は0)、乗った相手が負けていれば逆に、他の3人のうち勝っている人が勝ち幅に応じて多く受け取ります(負けている人は関係なし)。該当者がいない場合は均等割りになります。5人目以降のメンバーは上の「メンバー管理」で登録してください。</div>
-  </section>
-
-  <div class="results">
-    <h2>今回の精算プレビュー (Nao)</h2>
-    <div class="totals" id="totals"></div>
-    <div class="settle-list" id="settleList"></div>
-    <div class="record-row">
-      <button class="icon-btn primary" id="recordBtn" type="button">この半荘を記録する</button>
-    </div>
-  </div>
-
-  <section class="history-wrap">
-    <h2>履歴</h2>
-    <div class="table-scroll">
-      <table class="history" id="historyTable">
-        <thead><tr><th>#</th><th>日時</th><th>結果</th><th>操作</th></tr></thead>
-        <tbody id="historyBody"></tbody>
-      </table>
-    </div>
-    <div class="history-empty" id="historyEmpty">まだ記録がありません。半荘を入力して「記録する」を押してください。</div>
-  </section>
 
   <section class="share-wrap">
     <h2>共有</h2>
