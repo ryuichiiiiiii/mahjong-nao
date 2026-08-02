@@ -252,6 +252,45 @@ details.rules[open] > summary .chev{transform:rotate(90deg);}
 .rider-row.is-archived{opacity:.5;}
 .rider-empty{font-size:.8rem;color:var(--ink-muted);margin-top:.6rem;}
 
+/* yakuman memo */
+.yakuman-row{
+  display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;
+  background:var(--paper);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:.6rem .85rem;
+  margin-top:.6rem;
+  font-size:.86rem;
+}
+.yakuman-row .tag{
+  font-family:var(--serif);font-weight:600;color:var(--lacquer);
+}
+.yakuman-row .meta{color:var(--ink-muted);font-size:.78rem;}
+.yakuman-row .danger-link{margin-left:auto;}
+.yakuman-add{
+  display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-top:1rem;
+}
+.yakuman-add input[type=text]{
+  flex:1 1 160px;min-width:0;
+  font-family:var(--sans);font-size:.88rem;
+  padding:.5rem .7rem;border-radius:8px;border:1px solid var(--line);
+  background:var(--paper);color:var(--ink);
+}
+.yakuman-select{width:auto;min-width:96px;}
+.yakuman-select select{
+  font-family:var(--sans);font-size:.85rem;
+  padding:.5rem 1.1rem .5rem .6rem;border-radius:8px;border:1px solid var(--line);
+  background:var(--paper);color:var(--ink);
+}
+.yakuman-tag{
+  display:inline-block;
+  font-size:.68rem;
+  color:var(--lacquer);
+  margin-left:.3rem;
+}
+:root[data-theme="dark"] .yakuman-row .tag{color:#e8968d;}
+:root[data-theme="dark"] .yakuman-tag{color:#e8968d;}
+
 /* current round section */
 .section-head{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;flex-wrap:wrap;}
 .section-head h2{font-family:var(--serif);font-size:1.05rem;font-weight:600;margin:0;color:var(--ink);}
@@ -489,6 +528,39 @@ fieldset{border:none;padding:0;margin:0;}
     <div class="hint">今回対局していないメンバーが、4人のうち誰かに乗っかれます。乗った相手の今回のNaoをそのまま受け取り/支払いします。乗った相手が勝っていれば、その分は他の3人のうち負けている人が負け幅に応じて多く負担し(勝っている人の負担は0)、乗った相手が負けていれば逆に、他の3人のうち勝っている人が勝ち幅に応じて多く受け取ります(負けている人は関係なし)。該当者がいない場合は均等割りになります。5人目以降のメンバーは上の「メンバー管理」で登録してください。</div>
   </section>
 
+  <section class="riders-wrap">
+    <div class="section-head">
+      <h2>役満メモ</h2>
+    </div>
+    <div id="yakumanRows"></div>
+    <div class="yakuman-add">
+      <span class="select-wrap yakuman-select"><select id="yakumanPlayer"></select></span>
+      <input type="text" id="yakumanName" placeholder="役満名(例: 国士無双)" list="yakumanSuggestions">
+      <span class="select-wrap yakuman-select"><select id="yakumanMethod">
+        <option value="tsumo">ツモ</option>
+        <option value="ron">ロン</option>
+      </select></span>
+      <span class="select-wrap yakuman-select" id="yakumanFromWrap" style="display:none;"><select id="yakumanFrom"></select></span>
+      <button class="icon-btn small" id="addYakumanBtn" type="button">＋ 追加</button>
+    </div>
+    <datalist id="yakumanSuggestions">
+      <option value="国士無双"></option>
+      <option value="四暗刻"></option>
+      <option value="大三元"></option>
+      <option value="小四喜"></option>
+      <option value="大四喜"></option>
+      <option value="字一色"></option>
+      <option value="緑一色"></option>
+      <option value="清老頭"></option>
+      <option value="九蓮宝燈"></option>
+      <option value="四槓子"></option>
+      <option value="天和"></option>
+      <option value="地和"></option>
+      <option value="人和"></option>
+    </datalist>
+    <div class="hint">役満が出たら記録しておけます(金額の計算には影響しません)。履歴や成績にメモとして表示されます。</div>
+  </section>
+
   <details class="rules" id="rosterPanel">
     <summary>メンバー管理 <span class="chev">▸</span></summary>
     <div class="rules-body">
@@ -632,6 +704,7 @@ function freshState(){
     seatAssignment: roster.map(r => r.id),
     current: DEFAULT_CURRENT(),
     currentRiders: {},
+    currentYakuman: [],
     history: [],
   };
 }
@@ -660,11 +733,13 @@ function normalizeState(s){
     s.seatAssignment = ids;
   }
   if(!s.currentRiders || typeof s.currentRiders !== 'object') s.currentRiders = {};
+  if(!Array.isArray(s.currentYakuman)) s.currentYakuman = [];
   if(!Array.isArray(s.current) || s.current.length !== 4) s.current = DEFAULT_CURRENT();
   if(!Array.isArray(s.history)) s.history = [];
   s.history.forEach(e => {
     if(!Array.isArray(e.seatIds) || e.seatIds.length !== 4) e.seatIds = s.seatAssignment.slice();
     if(!Array.isArray(e.riders)) e.riders = [];
+    if(!Array.isArray(e.yakuman)) e.yakuman = [];
   });
   return s;
 }
@@ -676,6 +751,15 @@ let editingId = null;
 function rosterNameOf(id){
   const r = state.roster.find(x => x.id === id);
   return r ? r.name : '(不明)';
+}
+
+function yakumanTagsHtml(list, playerId){
+  return (list || [])
+    .filter(y => y.playerId === playerId)
+    .map(y => {
+      const method = y.method === 'ron' ? `ロン←${escapeHtml(rosterNameOf(y.fromPlayerId))}` : 'ツモ';
+      return `<span class="yakuman-tag">🀄 ${escapeHtml(y.name)}(${method})</span>`;
+    }).join('');
 }
 
 // ---------- persistence (localStorage cache) ----------
@@ -714,6 +798,7 @@ function sharedSlice(){
     history: state.history,
     current: state.current,
     currentRiders: state.currentRiders,
+    currentYakuman: state.currentYakuman,
   };
 }
 function saveLocal(){
@@ -772,13 +857,14 @@ function initFirebaseSync(){
     if(editingId === null){
       if(Array.isArray(remote.current) && remote.current.length === 4) state.current = remote.current;
       if(remote.currentRiders && typeof remote.currentRiders === 'object') state.currentRiders = remote.currentRiders;
+      if(Array.isArray(remote.currentYakuman)) state.currentYakuman = remote.currentYakuman;
     }
     normalizeState(state);
     persistLocal();
     writeConfigToInputs();
     buildRosterRows();
     buildSeats();
-    buildRiderRows();
+    buildRiderRows(); buildYakumanRows();
     render();
   });
 }
@@ -910,6 +996,13 @@ const riderRowsEl = document.getElementById('riderRows');
 const rosterRowsEl = document.getElementById('rosterRows');
 const memberNameInput = document.getElementById('memberNameInput');
 const addMemberBtn = document.getElementById('addMemberBtn');
+const yakumanRowsEl = document.getElementById('yakumanRows');
+const yakumanPlayerEl = document.getElementById('yakumanPlayer');
+const yakumanNameEl = document.getElementById('yakumanName');
+const yakumanMethodEl = document.getElementById('yakumanMethod');
+const yakumanFromEl = document.getElementById('yakumanFrom');
+const yakumanFromWrapEl = document.getElementById('yakumanFromWrap');
+const addYakumanBtn = document.getElementById('addYakumanBtn');
 
 function toast(msg){
   toastEl.textContent = msg;
@@ -950,7 +1043,7 @@ function buildSeats(){
       state.seatAssignment[i] = sel.value;
       delete state.currentRiders[sel.value];
       saveLocal();
-      buildRiderRows();
+      buildRiderRows(); buildYakumanRows();
       render();
     });
   });
@@ -991,7 +1084,7 @@ function buildRosterRows(){
       if(r) r.name = inp.value || '名無し';
       saveLocal();
       buildSeats();
-      buildRiderRows();
+      buildRiderRows(); buildYakumanRows();
       render();
     });
   });
@@ -1017,7 +1110,7 @@ function buildRosterRows(){
       saveLocal();
       buildRosterRows();
       buildSeats();
-      buildRiderRows();
+      buildRiderRows(); buildYakumanRows();
       render();
     });
   });
@@ -1033,7 +1126,7 @@ addMemberBtn.addEventListener('click', () => {
   saveLocal();
   buildRosterRows();
   buildSeats();
-  buildRiderRows();
+  buildRiderRows(); buildYakumanRows();
   render();
 });
 memberNameInput.addEventListener('keydown', (e) => {
@@ -1072,6 +1165,65 @@ function buildRiderRows(){
   });
   applyViewOnlyLock();
 }
+
+// ---------- yakuman memo ----------
+function refreshYakumanFromOptions(){
+  const playerId = yakumanPlayerEl.value || state.seatAssignment[0];
+  yakumanFromEl.innerHTML = state.seatAssignment
+    .filter(sid => sid !== playerId)
+    .map(sid => `<option value="${sid}">${escapeHtml(rosterNameOf(sid))}</option>`)
+    .join('');
+}
+
+function buildYakumanRows(){
+  yakumanPlayerEl.innerHTML = state.seatAssignment
+    .map(sid => `<option value="${sid}">${escapeHtml(rosterNameOf(sid))}</option>`)
+    .join('');
+  refreshYakumanFromOptions();
+
+  if(!state.currentYakuman.length){
+    yakumanRowsEl.innerHTML = `<div class="rider-empty">まだこの半荘の役満メモはありません。</div>`;
+  } else {
+    yakumanRowsEl.innerHTML = state.currentYakuman.map(y => `
+      <div class="yakuman-row" data-yakuman="${y.id}">
+        <span class="tag">🀄 ${escapeHtml(rosterNameOf(y.playerId))} — ${escapeHtml(y.name)}</span>
+        <span class="meta">${y.method === 'ron' ? `ロン(${escapeHtml(rosterNameOf(y.fromPlayerId))}から)` : 'ツモ'}</span>
+        <button class="danger-link" data-yakuman-del="${y.id}" type="button">削除</button>
+      </div>
+    `).join('');
+    yakumanRowsEl.querySelectorAll('[data-yakuman-del]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(viewOnly) return;
+        state.currentYakuman = state.currentYakuman.filter(y => y.id !== btn.dataset.yakumanDel);
+        saveLocal();
+        buildYakumanRows();
+      });
+    });
+  }
+  applyViewOnlyLock();
+}
+
+yakumanPlayerEl.addEventListener('change', refreshYakumanFromOptions);
+yakumanMethodEl.addEventListener('change', () => {
+  yakumanFromWrapEl.style.display = yakumanMethodEl.value === 'ron' ? 'inline-flex' : 'none';
+});
+addYakumanBtn.addEventListener('click', () => {
+  if(viewOnly) return;
+  const name = yakumanNameEl.value.trim();
+  if(!name){ toast('役満名を入力してください'); return; }
+  if(!state.seatAssignment.length) return;
+  const playerId = yakumanPlayerEl.value || state.seatAssignment[0];
+  const method = yakumanMethodEl.value;
+  const fromPlayerId = method === 'ron' ? (yakumanFromEl.value || null) : null;
+  state.currentYakuman.push({ id: uid(), playerId, name, method, fromPlayerId });
+  yakumanNameEl.value = '';
+  saveLocal();
+  buildYakumanRows();
+  toast('役満を記録しました');
+});
+yakumanNameEl.addEventListener('keydown', (e) => {
+  if(e.key === 'Enter'){ e.preventDefault(); addYakumanBtn.click(); }
+});
 
 // ---------- rules ----------
 function readConfigFromInputs(){
@@ -1147,6 +1299,7 @@ function render(){
         <div class="name">${escapeHtml(rosterNameOf(seatId))} · ${result.rankOf[i]+1}着</div>
         <div class="nao ${cls}">${fmt(t)} <span style="font-size:.65em;opacity:.7;">Nao</span></div>
         <div class="breakdown">素点 ${fmt(result.base[i])} / 順位点 ${fmt(result.uma[i])}${result.tobiAdj[i]!==0?` / 飛び ${fmt(result.tobiAdj[i])}`:''}${result.yakitoriAdj[i]!==0?` / 焼鳥 ${fmt(result.yakitoriAdj[i])}`:''}${adj!==0?` / 乗っかり負担 ${fmt(adj)}`:''}</div>
+        <div>${yakumanTagsHtml(state.currentYakuman, seatId)}</div>
       </div>
     `;
   }).join('') + riderCalc.riderResults.map(r => {
@@ -1183,24 +1336,28 @@ function isToday(iso){
 }
 
 function aggregateHistory(entries){
-  const totals = new Map(); // rosterId -> {total, count}
+  const totals = new Map(); // rosterId -> {total, count, yakuman}
   entries.forEach(entry => {
     const r = computeRound(state.config, entry.scores.map((s,i) => ({score:s, tobi:entry.tobi[i], yakitori:entry.yakitori[i]})));
     const riders = (entry.riders || []).map(rr => ({ id: rr.riderId, name: rosterNameOf(rr.riderId), target: rr.target }));
     const rc = applyRiders(r.totals, riders);
     entry.seatIds.forEach((id,i) => {
-      const prev = totals.get(id) || { total: 0, count: 0 };
-      totals.set(id, { total: prev.total + rc.adjustedTotals[i], count: prev.count + 1 });
+      const prev = totals.get(id) || { total: 0, count: 0, yakuman: 0 };
+      totals.set(id, { total: prev.total + rc.adjustedTotals[i], count: prev.count + 1, yakuman: prev.yakuman });
     });
     rc.riderResults.forEach(rr => {
-      const prev = totals.get(rr.id) || { total: 0, count: 0 };
-      totals.set(rr.id, { total: prev.total + rr.amt, count: prev.count + 1 });
+      const prev = totals.get(rr.id) || { total: 0, count: 0, yakuman: 0 };
+      totals.set(rr.id, { total: prev.total + rr.amt, count: prev.count + 1, yakuman: prev.yakuman });
+    });
+    (entry.yakuman || []).forEach(y => {
+      const prev = totals.get(y.playerId) || { total: 0, count: 0, yakuman: 0 };
+      totals.set(y.playerId, { ...prev, yakuman: prev.yakuman + 1 });
     });
   });
 
   const rows = state.roster.map(r => {
-    const v = totals.get(r.id) || { total: 0, count: 0 };
-    return { id: r.id, name: r.name, total: round2(v.total), count: v.count };
+    const v = totals.get(r.id) || { total: 0, count: 0, yakuman: 0 };
+    return { id: r.id, name: r.name, total: round2(v.total), count: v.count, yakuman: v.yakuman };
   });
   rows.sort((a,b) => b.total - a.total);
   return rows;
@@ -1212,12 +1369,13 @@ function renderBoardRows(rows, listEl){
     const avg = row.count ? row.total / row.count : 0;
     const isChamp = pos === 0 && row.total > 0;
     const rankInner = isChamp ? `<img class="champ-photo" src="celebrate.png" alt="">` : String(pos+1);
+    const yakumanBadge = row.yakuman ? ` · 🀄役満${row.yakuman}回` : '';
     return `
       <div class="rank-row ${isChamp ? 'first' : ''}">
         <div class="rank-num">${rankInner}</div>
         <div>
           <div class="rank-name">${escapeHtml(row.name)}</div>
-          <div class="rank-sub">${row.count ? `${row.count}半荘参加 · 平均 ${fmt(avg)} Nao` : '記録待ち'}</div>
+          <div class="rank-sub">${row.count ? `${row.count}半荘参加 · 平均 ${fmt(avg)} Nao${yakumanBadge}` : '記録待ち'}</div>
         </div>
         <div class="rank-total ${cls}">${fmt(row.total)} <span style="font-size:.6em;opacity:.7;">Nao</span></div>
       </div>
@@ -1261,7 +1419,7 @@ function renderHistory(){
       const t = rc.adjustedTotals[j];
       const cls = t > 0 ? 'nao-pos' : (t < 0 ? 'nao-neg' : '');
       const flags = (entry.tobi[j]?' 飛':'') + (entry.yakitori[j]?' 焼':'');
-      return `<span class="${cls}">${escapeHtml(rosterNameOf(id))} ${fmt(t)}${flags?`<small>${flags.trim()}</small>`:''}</span>`;
+      return `<span class="${cls}">${escapeHtml(rosterNameOf(id))} ${fmt(t)}${flags?`<small>${flags.trim()}</small>`:''}${yakumanTagsHtml(entry.yakuman, id)}</span>`;
     });
     const riderLines = rc.riderResults.map(rr => {
       const cls = rr.amt > 0 ? 'nao-pos' : (rr.amt < 0 ? 'nao-neg' : '');
@@ -1305,7 +1463,7 @@ function renderHistory(){
 
 function applyViewOnlyLock(){
   const controls = document.querySelectorAll(
-    '#seats select, #seats input, #rosterPanel input, #rosterPanel button, #rulesPanel input, #rulesPanel select, #recordBtn, #resetAllBtn, #riderRows select'
+    '#seats select, #seats input, #rosterPanel input, #rosterPanel button, #rulesPanel input, #rulesPanel select, #recordBtn, #resetAllBtn, #riderRows select, #yakumanPlayer, #yakumanName, #yakumanMethod, #yakumanFrom, #addYakumanBtn, #yakumanRows button'
   );
   controls.forEach(el => { el.disabled = viewOnly; });
 }
@@ -1319,8 +1477,9 @@ function startEdit(id){
   state.current = entry.scores.map((s,i) => ({ score: s, tobi: entry.tobi[i], yakitori: entry.yakitori[i] }));
   state.currentRiders = {};
   (entry.riders || []).forEach(rr => { state.currentRiders[rr.riderId] = rr.target; });
+  state.currentYakuman = (entry.yakuman || []).map(y => ({ ...y }));
   buildSeats();
-  buildRiderRows();
+  buildRiderRows(); buildYakumanRows();
   render();
   const target = document.querySelector('.section-head');
   if(target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1329,9 +1488,10 @@ function cancelEdit(){
   editingId = null;
   state.current = DEFAULT_CURRENT();
   state.currentRiders = {};
+  state.currentYakuman = [];
   saveLocal();
   buildSeats();
-  buildRiderRows();
+  buildRiderRows(); buildYakumanRows();
   render();
 }
 cancelEditBtn.addEventListener('click', () => { if(!viewOnly) cancelEdit(); });
@@ -1361,14 +1521,16 @@ recordBtn.addEventListener('click', () => {
       entry.tobi = state.current.map(r => r.tobi);
       entry.yakitori = state.current.map(r => r.yakitori);
       entry.riders = activeRiders;
+      entry.yakuman = state.currentYakuman.slice();
     }
     const editedIdx = state.history.findIndex(h => h.id === editingId);
     editingId = null;
     state.current = DEFAULT_CURRENT();
     state.currentRiders = {};
+    state.currentYakuman = [];
     saveLocal();
     buildSeats();
-    buildRiderRows();
+    buildRiderRows(); buildYakumanRows();
     render();
     toast(`第${editedIdx+1}半荘を更新しました`);
     return;
@@ -1382,12 +1544,14 @@ recordBtn.addEventListener('click', () => {
     tobi: state.current.map(r => r.tobi),
     yakitori: state.current.map(r => r.yakitori),
     riders: activeRiders,
+    yakuman: state.currentYakuman.slice(),
   });
   state.current = DEFAULT_CURRENT();
   state.currentRiders = {};
+  state.currentYakuman = [];
   saveLocal();
   buildSeats();
-  buildRiderRows();
+  buildRiderRows(); buildYakumanRows();
   render();
   toast(`第${state.history.length}半荘を記録しました`);
 });
@@ -1435,7 +1599,7 @@ document.getElementById('resetAllBtn').addEventListener('click', () => {
     writeConfigToInputs();
     buildRosterRows();
     buildSeats();
-    buildRiderRows();
+    buildRiderRows(); buildYakumanRows();
     render();
     toast('すべてのデータを削除しました');
   }
@@ -1460,7 +1624,7 @@ function init(){
   applyViewOnlyLock();
   buildRosterRows();
   buildSeats();
-  buildRiderRows();
+  buildRiderRows(); buildYakumanRows();
   render();
   initFirebaseSync();
 }
