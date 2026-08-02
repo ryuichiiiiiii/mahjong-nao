@@ -166,6 +166,23 @@ header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:1
 .board .settle-row{background:var(--felt-soft);color:var(--ink);}
 .board .settle-row .amt{color:var(--ink);}
 
+/* today's board gets the felt "in play" treatment; total stays on the
+   quieter ledger panel, so the two read as active vs. archival at a glance */
+.board.today{background:var(--felt);border-color:transparent;color:#eee7d6;}
+.board.today h2{color:#f2ecd9;}
+.board.today .count{color:rgba(238,231,214,.65);}
+.board.today .rank-row{border-top-color:rgba(238,231,214,.14);}
+.board.today .rank-num{background:rgba(238,231,214,.14);color:rgba(238,231,214,.8);}
+.board.today .rank-row.first .rank-num{box-shadow:0 0 0 4px rgba(211,171,95,.28), var(--shadow);}
+.board.today .rank-name{color:#f2ecd9;}
+.board.today .rank-sub{color:rgba(238,231,214,.6);}
+.board.today .rank-total.pos{color:#8fd6b3;}
+.board.today .rank-total.neg{color:#e8968d;}
+.board.today .settle-list{border-top-color:rgba(238,231,214,.14);}
+.board.today .settle-row{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#f2ecd9;}
+.board.today .settle-row .arrow{color:var(--gold);}
+.board.today .settle-row .amt{color:#f2ecd9;}
+
 /* settings / roster panels */
 details.rules{
   background:var(--panel);
@@ -276,12 +293,19 @@ details.rules[open] > summary .chev{transform:rotate(90deg);}
   padding:.5rem .7rem;border-radius:8px;border:1px solid var(--line);
   background:var(--paper);color:var(--ink);
 }
-.yakuman-select{width:auto;min-width:96px;}
-.yakuman-select select{
+.yakuman-picker{position:relative;flex:0 0 auto;}
+.yakuman-picker select{
   font-family:var(--sans);font-size:.85rem;
-  padding:.5rem 1.1rem .5rem .6rem;border-radius:8px;border:1px solid var(--line);
+  padding:.5rem 1.7rem .5rem .65rem;border-radius:8px;border:1px solid var(--line);
   background:var(--paper);color:var(--ink);
+  appearance:none;-webkit-appearance:none;
+  min-width:96px;cursor:pointer;
 }
+.yakuman-picker::after{
+  content:'▾'; position:absolute; right:.65rem; top:50%; transform:translateY(-50%);
+  font-size:.62rem;color:var(--ink-muted);pointer-events:none;
+}
+.yakuman-picker select:focus-visible{outline:2px solid var(--felt-light);}
 .yakuman-tag{
   display:inline-block;
   font-size:.68rem;
@@ -566,13 +590,13 @@ fieldset{border:none;padding:0;margin:0;}
     </div>
     <div id="yakumanRows"></div>
     <div class="yakuman-add">
-      <span class="select-wrap yakuman-select"><select id="yakumanPlayer"></select></span>
+      <span class="yakuman-picker"><select id="yakumanPlayer"></select></span>
       <input type="text" id="yakumanName" placeholder="役満名(例: 国士無双)" list="yakumanSuggestions">
-      <span class="select-wrap yakuman-select"><select id="yakumanMethod">
+      <span class="yakuman-picker"><select id="yakumanMethod">
         <option value="tsumo">ツモ</option>
         <option value="ron">ロン</option>
       </select></span>
-      <span class="select-wrap yakuman-select" id="yakumanFromWrap" style="display:none;"><select id="yakumanFrom"></select></span>
+      <span class="yakuman-picker" id="yakumanFromWrap" style="display:none;"><select id="yakumanFrom"></select></span>
       <button class="icon-btn small" id="addYakumanBtn" type="button">＋ 追加</button>
     </div>
     <datalist id="yakumanSuggestions">
@@ -595,7 +619,7 @@ fieldset{border:none;padding:0;margin:0;}
     <div class="hint">役満が出たら記録しておけます(Naoの計算には影響しません)。履歴や成績にメモとして表示されます。</div>
   </section>
 
-  <section class="board">
+  <section class="board today">
     <div class="board-head">
       <h2>本日の成績</h2>
       <span class="count" id="boardCountToday"></span>
