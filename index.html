@@ -528,39 +528,6 @@ fieldset{border:none;padding:0;margin:0;}
     <div class="hint">今回対局していないメンバーが、4人のうち誰かに乗っかれます。乗った相手の今回のNaoをそのまま受け取り/支払いします。乗った相手が勝っていれば、その分は他の3人のうち負けている人が負け幅に応じて多く負担し(勝っている人の負担は0)、乗った相手が負けていれば逆に、他の3人のうち勝っている人が勝ち幅に応じて多く受け取ります(負けている人は関係なし)。該当者がいない場合は均等割りになります。5人目以降のメンバーは上の「メンバー管理」で登録してください。</div>
   </section>
 
-  <section class="riders-wrap">
-    <div class="section-head">
-      <h2>役満メモ</h2>
-    </div>
-    <div id="yakumanRows"></div>
-    <div class="yakuman-add">
-      <span class="select-wrap yakuman-select"><select id="yakumanPlayer"></select></span>
-      <input type="text" id="yakumanName" placeholder="役満名(例: 国士無双)" list="yakumanSuggestions">
-      <span class="select-wrap yakuman-select"><select id="yakumanMethod">
-        <option value="tsumo">ツモ</option>
-        <option value="ron">ロン</option>
-      </select></span>
-      <span class="select-wrap yakuman-select" id="yakumanFromWrap" style="display:none;"><select id="yakumanFrom"></select></span>
-      <button class="icon-btn small" id="addYakumanBtn" type="button">＋ 追加</button>
-    </div>
-    <datalist id="yakumanSuggestions">
-      <option value="国士無双"></option>
-      <option value="四暗刻"></option>
-      <option value="大三元"></option>
-      <option value="小四喜"></option>
-      <option value="大四喜"></option>
-      <option value="字一色"></option>
-      <option value="緑一色"></option>
-      <option value="清老頭"></option>
-      <option value="九蓮宝燈"></option>
-      <option value="四槓子"></option>
-      <option value="天和"></option>
-      <option value="地和"></option>
-      <option value="人和"></option>
-    </datalist>
-    <div class="hint">役満が出たら記録しておけます(金額の計算には影響しません)。履歴や成績にメモとして表示されます。</div>
-  </section>
-
   <details class="rules" id="rosterPanel">
     <summary>メンバー管理 <span class="chev">▸</span></summary>
     <div class="rules-body">
@@ -591,6 +558,41 @@ fieldset{border:none;padding:0;margin:0;}
       </table>
     </div>
     <div class="history-empty" id="historyEmpty">まだ記録がありません。半荘を入力して「記録する」を押してください。</div>
+  </section>
+
+  <section class="riders-wrap">
+    <div class="section-head">
+      <h2>役満メモ</h2>
+    </div>
+    <div id="yakumanRows"></div>
+    <div class="yakuman-add">
+      <span class="select-wrap yakuman-select"><select id="yakumanPlayer"></select></span>
+      <input type="text" id="yakumanName" placeholder="役満名(例: 国士無双)" list="yakumanSuggestions">
+      <span class="select-wrap yakuman-select"><select id="yakumanMethod">
+        <option value="tsumo">ツモ</option>
+        <option value="ron">ロン</option>
+      </select></span>
+      <span class="select-wrap yakuman-select" id="yakumanFromWrap" style="display:none;"><select id="yakumanFrom"></select></span>
+      <button class="icon-btn small" id="addYakumanBtn" type="button">＋ 追加</button>
+    </div>
+    <datalist id="yakumanSuggestions">
+      <option value="数え役満"></option>
+      <option value="国士無双"></option>
+      <option value="四暗刻"></option>
+      <option value="大三元"></option>
+      <option value="小四喜"></option>
+      <option value="大四喜"></option>
+      <option value="字一色"></option>
+      <option value="緑一色"></option>
+      <option value="清老頭"></option>
+      <option value="九蓮宝燈"></option>
+      <option value="四槓子"></option>
+      <option value="大車輪"></option>
+      <option value="天和"></option>
+      <option value="地和"></option>
+      <option value="人和"></option>
+    </datalist>
+    <div class="hint">役満が出たら記録しておけます(Naoの計算には影響しません)。履歴や成績にメモとして表示されます。</div>
   </section>
 
   <section class="board">
@@ -1384,8 +1386,9 @@ function renderBoardRows(rows, listEl){
 }
 
 function renderLeaderboard(){
+  const activeIds = new Set(state.roster.filter(r => r.active).map(r => r.id));
   const todayEntries = state.history.filter(e => isToday(e.at));
-  const todayRows = aggregateHistory(todayEntries);
+  const todayRows = aggregateHistory(todayEntries).filter(row => activeIds.has(row.id));
   boardCountTodayEl.textContent = todayEntries.length ? `${todayEntries.length} 半荘` : 'まだ本日の記録がありません';
   renderBoardRows(todayRows, leaderboardTodayEl);
   const todayBalances = todayRows.map(r => ({ name: r.name, amt: r.total }));
