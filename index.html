@@ -15,6 +15,10 @@
   --line:rgba(32,29,23,.14);
   --panel:#f6f3e9;
   --shadow:0 1px 2px rgba(20,18,12,.06),0 8px 24px -12px rgba(20,18,12,.25);
+  --gold-grad:linear-gradient(135deg,#fff6d8 0%,#f4d27e 20%,#c99a3d 40%,#fbe49a 55%,#a4711f 75%,#f4d27e 100%);
+  --gold-grad-h:linear-gradient(90deg,#a4711f,#f4d27e 25%,#fff6d8 50%,#f4d27e 75%,#a4711f);
+  --neon-red:#ff4d4d;
+  --neon-gold:#ffd76a;
   --serif:'Iowan Old Style','Palatino Linotype','Hiragino Mincho ProN','Noto Serif JP',serif;
   --sans:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic Medium','Yu Gothic','Noto Sans JP',system-ui,sans-serif;
   --mono:ui-monospace,'SF Mono','Menlo','Noto Sans Mono JP',monospace;
@@ -69,8 +73,8 @@ header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:1
 .mascot-wrap img{
   width:100%;height:100%;border-radius:999px;
   object-fit:cover;object-position:50% 10%;
-  border:2px solid var(--paper);
-  box-shadow:var(--shadow);
+  border:2.5px solid var(--neon-gold);
+  box-shadow:var(--shadow), 0 0 10px rgba(255,215,110,.4);
   display:block;
 }
 .mark-seal{
@@ -153,12 +157,27 @@ header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:1
   border:1.5px dashed rgba(255,255,255,.4);
   pointer-events:none;
 }
-.rank-row.first .rank-num{
-  width:2.3rem;height:2.3rem;
-  background:var(--gold);color:#fff;
-  box-shadow:0 0 0 4px rgba(169,130,63,.22), 0 0 16px rgba(211,171,95,.55), var(--shadow);
+.rank-row.first{position:relative;}
+.rank-row.first::before{
+  content:'';
+  position:absolute; left:-.15rem; top:50%;
+  width:3.5rem;height:3.5rem;
+  transform:translateY(-50%);
+  background:repeating-conic-gradient(rgba(255,215,110,.5) 0deg 5deg, transparent 5deg 24deg);
+  border-radius:999px;
+  pointer-events:none;
+  animation:sunburst-spin 7s linear infinite;
 }
-.rank-row.first .rank-num::after{border-color:rgba(255,255,255,.6);}
+@media (prefers-reduced-motion: reduce){
+  .rank-row.first::before{animation:none;}
+}
+.rank-row.first .rank-num{
+  position:relative;z-index:1;
+  width:2.3rem;height:2.3rem;
+  background:var(--gold-grad);color:#5c3d0a;
+  box-shadow:0 0 0 3px rgba(255,255,255,.5), 0 0 4px 4px rgba(169,130,63,.3), 0 0 20px rgba(255,215,110,.75), var(--shadow);
+}
+.rank-row.first .rank-num::after{border-color:rgba(255,255,255,.75);}
 .champ-photo{width:100%;height:100%;object-fit:cover;object-position:50% 6%;display:block;}
 .rank-name{font-weight:600;font-size:.92rem;}
 .rank-sub{font-size:.72rem;color:var(--ink-muted);margin-top:.1rem;}
@@ -179,22 +198,24 @@ header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:1
 /* today's board gets the felt "in play" treatment; total stays on the
    quieter ledger panel, so the two read as active vs. archival at a glance */
 .board.today{
+  border:2px solid var(--gold);
   background-color:var(--felt);
   background-image:
     repeating-linear-gradient(45deg, rgba(255,255,255,.03) 0px, rgba(255,255,255,.03) 1px, transparent 1px, transparent 11px),
     repeating-linear-gradient(-45deg, rgba(255,255,255,.03) 0px, rgba(255,255,255,.03) 1px, transparent 1px, transparent 11px);
-  border-color:transparent;color:#eee7d6;
+  box-shadow:var(--shadow), 0 0 16px rgba(212,175,90,.25);
+  color:#eee7d6;
 }
 .board.today h2{color:#f2ecd9;}
 .board.today .count{color:rgba(238,231,214,.65);}
 .board.today .rank-row{border-top-color:rgba(238,231,214,.14);}
 .board.today .rank-num{background:rgba(238,231,214,.14);color:rgba(238,231,214,.8);}
-.board.today .rank-row.first .rank-num{box-shadow:0 0 0 4px rgba(211,171,95,.28), var(--shadow);}
+.board.today .rank-row.first .rank-num{box-shadow:0 0 0 3px rgba(255,255,255,.55), 0 0 4px 4px rgba(169,130,63,.32), 0 0 22px rgba(255,215,110,.8), var(--shadow);}
 .board.today .rank-name{color:#f2ecd9;}
 .board.today .rank-sub{color:rgba(238,231,214,.6);}
-.board.today .rank-total.pos{color:#8fd6b3;text-shadow:0 0 14px rgba(143,214,179,.45);}
+.board.today .rank-total.pos{color:#8fd6b3;text-shadow:0 0 4px rgba(255,255,255,.5), 0 0 16px rgba(143,214,179,.6);}
 .board.today .rank-total.neg{color:#e8968d;}
-.board.today .rank-row.first .rank-total.pos{color:#c9a24b;text-shadow:0 0 16px rgba(211,171,95,.6);}
+.board.today .rank-row.first .rank-total.pos{color:var(--neon-gold);text-shadow:0 0 4px rgba(255,255,255,.6), 0 0 10px rgba(255,215,106,.8), 0 0 22px rgba(255,215,106,.6);}
 .board.today .settle-list{border-top-color:rgba(238,231,214,.14);}
 .board.today .settle-row{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#f2ecd9;}
 .board.today .settle-row .arrow{color:var(--gold);}
@@ -413,9 +434,19 @@ details.rules[open] > summary .chev{transform:rotate(90deg);}
   padding:.15rem .55rem;
 }
 .record-row{display:flex;justify-content:flex-end;margin-top:1rem;}
+#recordBtn{
+  background:var(--gold-grad);
+  color:#4a2f08;
+  border:none;
+  font-weight:700;
+  box-shadow:0 0 0 1px rgba(255,255,255,.4) inset, 0 0 18px rgba(255,215,110,.5), var(--shadow);
+}
+#recordBtn:hover{filter:brightness(1.06);}
+#recordBtn:disabled{background:var(--panel);color:var(--ink-muted);box-shadow:none;filter:none;}
 
 /* results (current hanchan preview) */
 .results{
+  border:2px solid var(--gold);
   background-color:var(--felt);
   background-image:
     repeating-linear-gradient(45deg, rgba(255,255,255,.03) 0px, rgba(255,255,255,.03) 1px, transparent 1px, transparent 11px),
@@ -451,7 +482,7 @@ details.rules[open] > summary .chev{transform:rotate(90deg);}
   font-variant-numeric:tabular-nums;
   letter-spacing:.01em;
 }
-.total-card .nao.pos{color:#8fd6b3;text-shadow:0 0 14px rgba(143,214,179,.4);}
+.total-card .nao.pos{color:#8fd6b3;text-shadow:0 0 4px rgba(255,255,255,.4), 0 0 16px rgba(143,214,179,.55);}
 .total-card .nao.neg{color:#e8968d;}
 .total-card .nao.zero{color:rgba(238,231,214,.8);}
 .total-card .breakdown{font-size:.68rem;color:rgba(238,231,214,.55);margin-top:.4rem;font-family:var(--mono);line-height:1.6;}
@@ -530,6 +561,8 @@ table.history tr.is-editing{background:var(--felt-soft);}
   z-index:50;
 }
 .toast.show{opacity:1;transform:translate(-50%,0);}
+
+@keyframes sunburst-spin{ to { transform:translateY(-50%) rotate(360deg); } }
 
 footer.note{text-align:center;font-size:.72rem;color:var(--ink-muted);}
 
