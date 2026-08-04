@@ -532,6 +532,63 @@ table.history td.op button{margin:0 .2rem;}
 table.history tr.is-editing{background:var(--felt-soft);}
 .history-empty{font-size:.85rem;color:var(--ink-muted);}
 
+/* below the seat-grid breakpoint, the wide table reflows into stacked
+   cards — one card per hanchan — instead of forcing horizontal scroll */
+@media (max-width:719px){
+  table.history{border-collapse:separate;border-spacing:0 .7rem;white-space:normal;}
+  table.history thead{display:none;}
+  table.history tr{
+    display:grid;
+    grid-template-columns:auto 1fr;
+    grid-template-areas:
+      "idx date"
+      "results results"
+      "op op";
+    gap:.5rem .6rem;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:.85rem .95rem;
+  }
+  table.history tr.is-editing{border-color:var(--felt-light);}
+  table.history td{
+    display:block;
+    border-bottom:none;
+    padding:0;
+    text-align:left;
+    white-space:normal;
+  }
+  table.history td:first-child{
+    grid-area:idx;
+    font-weight:600;
+    font-size:.82rem;
+    color:var(--ink);
+  }
+  table.history td:first-child::before{content:'第';font-weight:400;color:var(--ink-muted);}
+  table.history td:first-child::after{content:'半荘';font-weight:400;color:var(--ink-muted);}
+  table.history td:nth-child(2){
+    grid-area:date;
+    text-align:right;
+    font-size:.74rem;
+    color:var(--ink-muted);
+  }
+  table.history td.results-cell{
+    grid-area:results;
+    border-top:1px solid var(--line);
+    padding-top:.6rem;
+    min-width:0;
+  }
+  table.history td.op{
+    grid-area:op;
+    display:flex;
+    justify-content:flex-end;
+    gap:.5rem;
+    border-top:1px solid var(--line);
+    padding-top:.55rem;
+  }
+  table.history td.op button{margin:0;}
+}
+
 /* share */
 .share-wrap{
   background:var(--panel);
