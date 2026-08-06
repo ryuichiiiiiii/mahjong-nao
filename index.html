@@ -665,7 +665,7 @@ fieldset{border:none;padding:0;margin:0;}
       <h2>乗っかり</h2>
     </div>
     <div id="riderRows"></div>
-    <div class="hint">今回対局していないメンバーが、4人のうち誰かに乗っかれます。乗った相手の今回のNaoをそのまま受け取り/支払いします。乗った相手が勝っていれば、その分は他の3人のうち負けている人が負け幅に応じて多く負担し(勝っている人の負担は0)、乗った相手が負けていれば逆に、他の3人のうち勝っている人が勝ち幅に応じて多く受け取ります(負けている人は関係なし)。該当者がいない場合は均等割りになります。5人目以降のメンバーは上の「メンバー管理」で登録してください。</div>
+    <div class="hint">今回対局していないメンバーが、4人のうち誰かに乗っかれます。乗った相手の今回のNaoをそのまま受け取り/支払いします。乗った相手が勝っていれば、その分は他の3人(および他に乗っかっている人)のうち負けている人が負け幅に応じて多く負担し(勝っている人の負担は0)、乗った相手が負けていれば逆に、他の3人(および他に乗っかっている人)のうち勝っている人が勝ち幅に応じて多く受け取ります(負けている人は関係なし)。乗っかっている人自身も、自分が乗っている相手の勝ち負けに応じて他の乗っかりの負担/受け取りに参加します。該当者がいない場合は全員で均等割りになります。5人目以降のメンバーは上の「メンバー管理」で登録してください。</div>
   </section>
 
   <details class="rules" id="rosterPanel">
@@ -922,12 +922,20 @@ function loadLocal(){
 }
 
 // ---------- live sync (Firebase Realtime Database) ----------
-// Only the shared fields (config/roster/seatAssignment/history) are synced;
-// the in-progress "current" hanchan entry stays local until recorded, so a
-// remote update never clobbers whatever you're mid-typing.
+// The "meta" fields (config/roster/seatAssignment/current/currentRiders/
+// currentYakuman) sync as one debounced whole-object write, same as before.
+// Finalized history entries do NOT go through that path: each hanchan is
+// its own key under sharedState/historyEntries, written the instant it's
+// recorded/edited/deleted. Two devices recording different hanchan at the
+// same moment touch different keys and can never clobber each other — the
+// old design pushed the entire history array on every save, so whichever
+// device's full-array write landed last silently erased the other's entry.
+// The in-progress "current" hanchan entry stays local until recorded, so a
+// remote meta update never clobbers whatever you're mid-typing.
 const hasFirebase = typeof firebase !== 'undefined';
 let db = null;
 let stateRef = null;
+let historyRef = null;
 let firebaseReady = false;
 let lastSyncedJSON = null;
 let pushTimer = null;
@@ -937,7 +945,6 @@ function sharedSlice(){
     config: state.config,
     roster: state.roster,
     seatAssignment: state.seatAssignment,
-    history: state.history,
     current: state.current,
     currentRiders: state.currentRiders,
     currentYakuman: state.currentYakuman,
@@ -958,7 +965,17 @@ function pushRemote(){
   const json = JSON.stringify(payload);
   if(json === lastSyncedJSON) return;
   lastSyncedJSON = json;
-  stateRef.set(payload).catch(()=>{});
+  // update(), not set(): this must only touch the meta keys, never wipe
+  // out the sibling historyEntries map living under the same parent node.
+  stateRef.update(payload).catch(()=>{});
+}
+function pushHistoryEntry(entry){
+  if(!hasFirebase || !historyRef) return;
+  historyRef.child(entry.id).set(entry).catch(()=>{});
+}
+function removeHistoryEntry(id){
+  if(!hasFirebase || !historyRef) return;
+  historyRef.child(id).remove().catch(()=>{});
 }
 function setSyncBadge(status){
   const el = document.getElementById('syncBadge');
@@ -974,6 +991,7 @@ function initFirebaseSync(){
     firebase.initializeApp(FIREBASE_CONFIG);
     db = firebase.database();
     stateRef = db.ref('sharedState');
+    historyRef = db.ref('sharedState/historyEntries');
   }catch(e){ setSyncBadge('offline'); return; }
 
   db.ref('.info/connected').on('value', (snap) => {
@@ -988,13 +1006,30 @@ function initFirebaseSync(){
       pushRemote();
       return;
     }
-    const json = JSON.stringify(remote);
-    if(json === lastSyncedJSON) return; // this is just our own write echoing back
-    lastSyncedJSON = json;
+    // one-time migration from the old "whole history array" shape: copy
+    // each entry into its own keyed slot, then drop the legacy array so
+    // stale un-refreshed tabs stop finding (and trusting) it.
+    if(!remote.historyEntries && Array.isArray(remote.history) && remote.history.length && historyRef){
+      const updates = {};
+      remote.history.forEach(e => { if(e && e.id) updates[e.id] = e; });
+      if(Object.keys(updates).length){
+        historyRef.update(updates).then(() => stateRef.child('history').remove()).catch(()=>{});
+      }
+    }
+    const metaJson = JSON.stringify({
+      config: remote.config, roster: remote.roster, seatAssignment: remote.seatAssignment,
+      current: remote.current, currentRiders: remote.currentRiders, currentYakuman: remote.currentYakuman,
+    });
+    if(metaJson === lastSyncedJSON) return; // this is just our own write echoing back
+    lastSyncedJSON = metaJson;
     state.config = remote.config || state.config;
     state.roster = Array.isArray(remote.roster) ? remote.roster : state.roster;
     state.seatAssignment = Array.isArray(remote.seatAssignment) ? remote.seatAssignment : state.seatAssignment;
-    state.history = Array.isArray(remote.history) ? remote.history : state.history;
+    // safety net for the brief window before historyEntries has populated
+    // state.history for the first time (e.g. mid-migration)
+    if((!Array.isArray(state.history) || !state.history.length) && Array.isArray(remote.history) && remote.history.length){
+      state.history = remote.history;
+    }
     // don't let someone else's live typing clobber a hanchan we're actively editing here
     if(editingId === null){
       if(Array.isArray(remote.current) && remote.current.length === 4) state.current = remote.current;
@@ -1008,6 +1043,22 @@ function initFirebaseSync(){
     buildSeats();
     buildRiderRows(); buildYakumanRows();
     render();
+  });
+
+  historyRef.on('value', (snap) => {
+    const map = snap.val() || {};
+    const arr = Object.values(map).filter(e => e && e.id);
+    arr.forEach(e => {
+      if(!Array.isArray(e.seatIds) || e.seatIds.length !== 4) e.seatIds = state.seatAssignment.slice();
+      if(!Array.isArray(e.riders)) e.riders = [];
+      if(!Array.isArray(e.yakuman)) e.yakuman = [];
+    });
+    arr.sort((a,b) => new Date(a.at) - new Date(b.at));
+    if(arr.length || Object.keys(map).length === 0){
+      state.history = arr;
+      persistLocal();
+      render();
+    }
   });
 }
 
@@ -1056,12 +1107,16 @@ function computeRound(cfg, roundInputs){
 // riders: array of {id, name, target(0-3)}. Each rider mirrors the ridden
 // player's Nao result; the ridden player's own result is untouched.
 // - If the ridden player WON this hanchan, the cost is funded by whichever
-//   of the other 3 are losing, weighted toward whoever is losing the most
-//   (players currently ahead bear none of it).
+//   of the other 3 mains (plus any OTHER riders) are losing, weighted
+//   toward whoever is losing the most (anyone currently ahead bears none).
 // - If the ridden player LOST, the gain instead comes out of whichever of
-//   the other 3 are winning, weighted toward whoever is winning the most
-//   (players currently behind get none of it).
-// - If nobody among the other 3 qualifies either way, split evenly.
+//   the other 3 mains (plus any other riders) are winning, weighted toward
+//   whoever is winning the most (anyone currently behind gets none).
+// - A rider's own standing for this purpose is their mirrored total (i.e.
+//   their target's raw Nao result), so a rider mirroring a loser can still
+//   get pulled into funding a DIFFERENT rider's win, same as a real player.
+// - If nobody qualifies either way, split evenly among every other
+//   participant (the 3 mains plus any other riders).
 // A rider must be someone NOT currently seated as one of the 4 mains.
 // seatAssignment can change via several paths (local seat dropdown, a
 // remote Firebase update, loading an entry into edit mode), and any path
@@ -1078,18 +1133,36 @@ function sanitizeCurrentRiders(){
 function applyRiders(mainTotals, riders){
   const round2 = x => Math.round(x * 100) / 100;
   const adjustedTotals = mainTotals.slice();
-  const riderResults = riders.map(r => {
-    const t = mainTotals[r.target];
-    const others = [0,1,2,3].filter(i => i !== r.target);
+  // each rider's own raw mirrored amount is fixed up front (order-independent,
+  // same spirit as using the original mainTotals rather than running totals);
+  // riderAdjustments accumulates whatever burden/gain a rider picks up while
+  // acting as a candidate in a DIFFERENT rider's redistribution
+  const riderBase = riders.map(r => mainTotals[r.target]);
+  const riderAdjustments = riders.map(() => 0);
+
+  riders.forEach((r, ri) => {
+    const t = riderBase[ri];
     const dir = t >= 0 ? 1 : -1;
-    const weights = others.map(i => Math.max(0, -dir * mainTotals[i]));
+    const mainCandidates = [0,1,2,3]
+      .filter(i => i !== r.target)
+      .map(i => ({ total: mainTotals[i], apply: share => { adjustedTotals[i] -= share; } }));
+    const riderCandidates = riders
+      .map((rr, rri) => rri)
+      .filter(rri => rri !== ri)
+      .map(rri => ({ total: riderBase[rri], apply: share => { riderAdjustments[rri] -= share; } }));
+    const candidates = mainCandidates.concat(riderCandidates);
+    const weights = candidates.map(c => Math.max(0, -dir * c.total));
     const weightSum = weights.reduce((a,b) => a+b, 0);
-    others.forEach((i,k) => {
-      const share = weightSum > 0 ? t * weights[k] / weightSum : t/3;
-      adjustedTotals[i] -= share;
+    candidates.forEach((c,k) => {
+      const share = weightSum > 0 ? t * weights[k] / weightSum : t / candidates.length;
+      c.apply(share);
     });
-    return { id: r.id, name: r.name, target: r.target, amt: round2(t) };
   });
+
+  const riderResults = riders.map((r, ri) => ({
+    id: r.id, name: r.name, target: r.target,
+    amt: round2(riderBase[ri] + riderAdjustments[ri]),
+  }));
   for(let i=0;i<adjustedTotals.length;i++) adjustedTotals[i] = round2(adjustedTotals[i]);
   return { adjustedTotals, riderResults };
 }
@@ -1610,7 +1683,8 @@ function renderHistory(){
       if(confirm(`第${idx+1}半荘の記録を削除しますか?`)){
         if(editingId === id) cancelEdit();
         state.history.splice(idx, 1);
-        saveLocal();
+        persistLocal();
+        removeHistoryEntry(id);
         render();
       }
     });
@@ -1692,7 +1766,9 @@ recordBtn.addEventListener('click', () => {
     state.current = DEFAULT_CURRENT();
     state.currentRiders = {};
     state.currentYakuman = [];
-    saveLocal();
+    persistLocal();
+    if(entry) pushHistoryEntry(entry);
+    schedulePush();
     buildSeats();
     buildRiderRows(); buildYakumanRows();
     render();
@@ -1700,7 +1776,7 @@ recordBtn.addEventListener('click', () => {
     return;
   }
 
-  state.history.push({
+  const newEntry = {
     id: uid(),
     at: new Date().toISOString(),
     seatIds: state.seatAssignment.slice(),
@@ -1709,11 +1785,14 @@ recordBtn.addEventListener('click', () => {
     yakitori: state.current.map(r => r.yakitori),
     riders: activeRiders,
     yakuman: state.currentYakuman.slice(),
-  });
+  };
+  state.history.push(newEntry);
   state.current = DEFAULT_CURRENT();
   state.currentRiders = {};
   state.currentYakuman = [];
-  saveLocal();
+  persistLocal();
+  pushHistoryEntry(newEntry);
+  schedulePush();
   buildSeats();
   buildRiderRows(); buildYakumanRows();
   render();
