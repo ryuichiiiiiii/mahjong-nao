@@ -226,6 +226,19 @@ header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:1
 .board.today .settle-row{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#f2ecd9;}
 .board.today .settle-row .arrow{color:var(--gold);}
 .board.today .settle-row .amt{color:#f2ecd9;}
+.today-end-btn{
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.22);
+  color:#f2ecd9;
+  border-radius:999px;
+  padding:.3rem .75rem;
+  font-size:.7rem;
+  font-family:var(--sans);
+  cursor:pointer;
+  white-space:nowrap;
+}
+.today-end-btn:hover{background:rgba(255,255,255,.16);}
+.today-end-btn:disabled{opacity:.4;cursor:not-allowed;}
 
 /* settings / roster panels */
 details.rules{
@@ -738,7 +751,10 @@ fieldset{border:none;padding:0;margin:0;}
   <section class="board today">
     <div class="board-head">
       <h2>本日の成績</h2>
-      <span class="count" id="boardCountToday"></span>
+      <div style="display:flex;align-items:center;gap:.6rem;">
+        <span class="count" id="boardCountToday"></span>
+        <button class="today-end-btn" id="endTodayBtn" type="button">本日を終了</button>
+      </div>
     </div>
     <div id="leaderboardToday"></div>
     <div class="settle-list" id="settleListToday"></div>
@@ -761,8 +777,8 @@ fieldset{border:none;padding:0;margin:0;}
           <input type="number" id="basePoint" value="25000" step="1000">
         </div>
         <div class="field">
-          <label for="rate">レート(点 / 1Nao)</label>
-          <input type="number" id="rate" value="1000" step="100" min="1">
+          <label for="naoPerThousand">レート(1000点 = 何Nao)</label>
+          <input type="number" id="naoPerThousand" value="1" step="0.1">
         </div>
         <div class="field">
           <label for="tobiAmount">飛び失点(点・1人あたり)</label>
@@ -775,7 +791,7 @@ fieldset{border:none;padding:0;margin:0;}
       </div>
       <div class="rules-grid" style="margin-top:.2rem;">
         <div class="field" style="grid-column:1/-1;">
-          <label>順位点(ウマ) — 1着 / 2着 / 3着 / 4着 (Nao)</label>
+          <label>順位点(ウマ) — 1着 / 2着 / 3着 / 4着 (点・1000点単位で入力)</label>
           <div class="uma-row">
             <div class="field"><input type="number" id="uma1" value="10"></div>
             <div class="field"><input type="number" id="uma2" value="5"></div>
@@ -784,7 +800,7 @@ fieldset{border:none;padding:0;margin:0;}
           </div>
         </div>
       </div>
-      <div class="hint">素点 = その半荘終了時の卓上点数。飛びは0点未満になったプレイヤーにチェック。焼き鳥は「その半荘で一度も和了できなかった」プレイヤーにチェック。どちらも該当プレイヤーが他の3人それぞれに設定した点数(レート換算)を個別に支払います(3人合計では3倍)。ルールは半荘を記録するたびに現在の設定で計算され、以後の集計にも遡って適用されます。</div>
+      <div class="hint">素点 = その半荘終了時の卓上点数。順位点(ウマ)も飛び・焼き鳥もすべて「点」で入力し、レートで一律Naoに換算されます(例: レートが1000点=1Naoなら、順位点10は10000点=10Nao)。飛びは0点未満になったプレイヤーにチェック。焼き鳥は「その半荘で一度も和了できなかった」プレイヤーにチェック。どちらも該当プレイヤーが他の3人それぞれに設定した点数を個別に支払います(3人合計では3倍)。ルールは半荘を記録するたびに現在の設定で計算され、以後の集計にも遡って適用されます。</div>
       <div class="warn" id="umaWarn">順位点の合計が 0 になっていません。ゼロサムにするには4つの値の合計を0にしてください。</div>
     </div>
   </details>
@@ -826,7 +842,7 @@ const FIREBASE_CONFIG = {
 
 const DEFAULT_CONFIG = {
   basePoint: 25000,
-  rate: 1000,
+  naoPerThousand: 1,
   tobiAmount: 10000,
   yakitoriAmount: 10000,
   uma: [10, 5, -5, -10],
@@ -836,6 +852,18 @@ const DEFAULT_CURRENT = () => [0,1,2,3].map(() => ({ score: 25000, tobi: false, 
 
 function uid(){
   return (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2));
+}
+
+// Mahjong sessions run at all hours and sometimes past dawn, so there's no
+// fixed hour that reliably marks "today" ending — instead "本日" runs from
+// state.todaySessionStart (a shared timestamp) until someone taps "本日を
+// 終了" to close it out. gamingDayStart only supplies a one-time sensible
+// seed for todaySessionStart the first time this field shows up on a
+// device/database that predates it; it's never consulted again after that.
+const GAMING_DAY_ROLLOVER_HOUR = 5;
+function gamingDayStart(d){
+  const shifted = new Date(d.getTime() - GAMING_DAY_ROLLOVER_HOUR * 60 * 60 * 1000);
+  return new Date(shifted.getFullYear(), shifted.getMonth(), shifted.getDate(), GAMING_DAY_ROLLOVER_HOUR, 0, 0, 0);
 }
 
 function freshState(){
@@ -848,6 +876,7 @@ function freshState(){
     currentRiders: {},
     currentYakuman: [],
     history: [],
+    todaySessionStart: gamingDayStart(new Date()).toISOString(),
   };
 }
 
@@ -874,6 +903,16 @@ function normalizeState(s){
     while(ids.length < 4) ids.push(s.roster[0] ? s.roster[0].id : uid());
     s.seatAssignment = ids;
   }
+  if(s.config){
+    // migrate from the old "points per 1 Nao" rate field to "Nao per
+    // 1000 points" — mathematically inverse, and uma now rides the same
+    // conversion instead of being an already-in-Nao value.
+    if(typeof s.config.naoPerThousand !== 'number'){
+      s.config.naoPerThousand = (typeof s.config.rate === 'number' && s.config.rate) ? 1000 / s.config.rate : 1;
+    }
+    delete s.config.rate;
+  }
+  if(typeof s.todaySessionStart !== 'string') s.todaySessionStart = gamingDayStart(new Date()).toISOString();
   if(!s.currentRiders || typeof s.currentRiders !== 'object') s.currentRiders = {};
   if(!Array.isArray(s.currentYakuman)) s.currentYakuman = [];
   if(!Array.isArray(s.current) || s.current.length !== 4) s.current = DEFAULT_CURRENT();
@@ -948,6 +987,7 @@ function sharedSlice(){
     current: state.current,
     currentRiders: state.currentRiders,
     currentYakuman: state.currentYakuman,
+    todaySessionStart: state.todaySessionStart,
   };
 }
 function saveLocal(){
@@ -1019,12 +1059,14 @@ function initFirebaseSync(){
     const metaJson = JSON.stringify({
       config: remote.config, roster: remote.roster, seatAssignment: remote.seatAssignment,
       current: remote.current, currentRiders: remote.currentRiders, currentYakuman: remote.currentYakuman,
+      todaySessionStart: remote.todaySessionStart,
     });
     if(metaJson === lastSyncedJSON) return; // this is just our own write echoing back
     lastSyncedJSON = metaJson;
     state.config = remote.config || state.config;
     state.roster = Array.isArray(remote.roster) ? remote.roster : state.roster;
     state.seatAssignment = Array.isArray(remote.seatAssignment) ? remote.seatAssignment : state.seatAssignment;
+    if(typeof remote.todaySessionStart === 'string') state.todaySessionStart = remote.todaySessionStart;
     // safety net for the brief window before historyEntries has populated
     // state.history for the first time (e.g. mid-migration)
     if((!Array.isArray(state.history) || !state.history.length) && Array.isArray(remote.history) && remote.history.length){
@@ -1039,8 +1081,17 @@ function initFirebaseSync(){
     normalizeState(state);
     persistLocal();
     writeConfigToInputs();
-    buildRosterRows();
-    buildSeats();
+    // buildSeats()/buildRosterRows() fully destroy and recreate their
+    // <input> elements. Doing that while someone has one of those inputs
+    // focused (typing a score, renaming a member) yanks focus away and
+    // closes the on-screen keyboard mid-keystroke — so a remote update
+    // that arrives mid-type must update state in memory (for correct
+    // totals/echo-suppression) without touching the live DOM there. The
+    // next real edit to that field re-renders it from current state anyway.
+    const seatFocused = document.activeElement && seatsEl.contains(document.activeElement);
+    const rosterFocused = document.activeElement && rosterRowsEl.contains(document.activeElement);
+    if(!rosterFocused) buildRosterRows();
+    if(!seatFocused) buildSeats();
     buildRiderRows(); buildYakumanRows();
     render();
   });
@@ -1069,14 +1120,17 @@ function computeRound(cfg, roundInputs){
   const rankOf = new Array(n);
   order.forEach((idx, rank) => { rankOf[idx] = rank; });
 
-  const base = roundInputs.map(r => (r.score - cfg.basePoint) / cfg.rate);
-  const uma = roundInputs.map((r,i) => cfg.uma[rankOf[i]] || 0);
+  // Everything below is entered in raw mahjong points and converted to
+  // Nao through the same rate: naoPerThousand is "how many Nao is 1000
+  // points". uma is entered in thousands of points (e.g. 10 = 10000).
+  const base = roundInputs.map(r => (r.score - cfg.basePoint) / 1000 * cfg.naoPerThousand);
+  const uma = roundInputs.map((r,i) => (cfg.uma[rankOf[i]] || 0) * cfg.naoPerThousand);
 
   // tobi/yakitori: the flagged player pays the full per-opponent amount
   // (converted from points via the rate) to EACH of the other 3 players
   // individually, not a pooled/split total.
   const tobiAdj = new Array(n).fill(0);
-  const tobiEach = cfg.tobiAmount / cfg.rate;
+  const tobiEach = cfg.tobiAmount / 1000 * cfg.naoPerThousand;
   roundInputs.forEach((r,i) => {
     if(r.tobi && tobiEach !== 0){
       const others = roundInputs.map((_,j)=>j).filter(j => j !== i);
@@ -1088,7 +1142,7 @@ function computeRound(cfg, roundInputs){
   });
 
   const yakitoriAdj = new Array(n).fill(0);
-  const yakitoriEach = cfg.yakitoriAmount / cfg.rate;
+  const yakitoriEach = cfg.yakitoriAmount / 1000 * cfg.naoPerThousand;
   roundInputs.forEach((r,i) => {
     if(r.yakitori && yakitoriEach !== 0){
       const others = roundInputs.map((_,j)=>j).filter(j => j !== i);
@@ -1457,7 +1511,7 @@ yakumanNameEl.addEventListener('keydown', (e) => {
 function readConfigFromInputs(){
   state.config = {
     basePoint: Number(document.getElementById('basePoint').value) || 0,
-    rate: Number(document.getElementById('rate').value) || 1000,
+    naoPerThousand: Number(document.getElementById('naoPerThousand').value) || 0,
     tobiAmount: Number(document.getElementById('tobiAmount').value) || 0,
     yakitoriAmount: Number(document.getElementById('yakitoriAmount').value) || 0,
     uma: [1,2,3,4].map(n => Number(document.getElementById('uma'+n).value) || 0),
@@ -1466,13 +1520,13 @@ function readConfigFromInputs(){
 function writeConfigToInputs(){
   const c = state.config;
   document.getElementById('basePoint').value = c.basePoint;
-  document.getElementById('rate').value = c.rate;
+  document.getElementById('naoPerThousand').value = c.naoPerThousand;
   document.getElementById('tobiAmount').value = c.tobiAmount;
   document.getElementById('yakitoriAmount').value = c.yakitoriAmount;
   c.uma.forEach((v,i) => { document.getElementById('uma'+(i+1)).value = v; });
 }
 
-['basePoint','rate','tobiAmount','yakitoriAmount','uma1','uma2','uma3','uma4'].forEach(id => {
+['basePoint','naoPerThousand','tobiAmount','yakitoriAmount','uma1','uma2','uma3','uma4'].forEach(id => {
   document.getElementById(id).addEventListener('input', () => { readConfigFromInputs(); saveLocal(); render(); });
   document.getElementById(id).addEventListener('change', () => { readConfigFromInputs(); saveLocal(); render(); });
 });
@@ -1558,11 +1612,6 @@ function render(){
   renderHistory();
 }
 
-function isToday(iso){
-  const d = new Date(iso);
-  const now = new Date();
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
-}
 
 function aggregateHistory(entries){
   const totals = new Map(); // rosterId -> {total, count, yakuman, tobi, yakitori}
@@ -1619,7 +1668,7 @@ function renderBoardRows(rows, listEl, opts){
 
 function renderLeaderboard(){
   const activeIds = new Set(state.roster.filter(r => r.active).map(r => r.id));
-  const todayEntries = state.history.filter(e => isToday(e.at));
+  const todayEntries = state.history.filter(e => e.at >= state.todaySessionStart);
   const todayRows = aggregateHistory(todayEntries).filter(row => activeIds.has(row.id));
   boardCountTodayEl.textContent = todayEntries.length ? `${todayEntries.length} 半荘` : 'まだ本日の記録がありません';
   renderBoardRows(todayRows, leaderboardTodayEl, { showBustCounts: true });
@@ -1699,7 +1748,7 @@ function renderHistory(){
 
 function applyViewOnlyLock(){
   const controls = document.querySelectorAll(
-    '#seats select, #seats input, #rosterPanel input, #rosterPanel button, #rulesPanel input, #rulesPanel select, #recordBtn, #resetAllBtn, #riderRows select, #yakumanPlayer, #yakumanName, #yakumanMethod, #yakumanFrom, #addYakumanBtn, #yakumanRows button'
+    '#seats select, #seats input, #rosterPanel input, #rosterPanel button, #rulesPanel input, #rulesPanel select, #recordBtn, #resetAllBtn, #riderRows select, #yakumanPlayer, #yakumanName, #yakumanMethod, #yakumanFrom, #addYakumanBtn, #yakumanRows button, #endTodayBtn'
   );
   controls.forEach(el => { el.disabled = viewOnly; });
 }
@@ -1831,6 +1880,17 @@ copyBtn.addEventListener('click', async () => {
   shareLinkInput.select();
   const ok = await copyText(shareLinkInput.value);
   toast(ok ? 'コピーしました' : 'コピーできませんでした。手動で選択してください');
+});
+
+// ---------- today session ----------
+document.getElementById('endTodayBtn').addEventListener('click', () => {
+  if(viewOnly) return;
+  if(confirm('本日の成績をここで区切りますか?(記録は消えません。次に記録する半荘から「本日の成績」を新しく数え直します)')){
+    state.todaySessionStart = new Date().toISOString();
+    saveLocal();
+    render();
+    toast('本日の成績をリセットしました');
+  }
 });
 
 // ---------- reset ----------
