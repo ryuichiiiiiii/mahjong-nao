@@ -634,7 +634,6 @@ table.history tr.is-editing{background:var(--felt-soft);}
   padding:.5rem .6rem;border-radius:8px;border:1px solid var(--line);
   background:var(--paper);color:var(--ink);
 }
-.danger-row{display:flex;justify-content:flex-end;}
 .danger-link{
   background:none;border:none;color:var(--ink-muted);
   font-size:.74rem;text-decoration:underline;cursor:pointer;padding:.2rem;
@@ -831,9 +830,6 @@ fieldset{border:none;padding:0;margin:0;}
     <div class="share-output" id="shareOutput" style="display:none;">
       <input type="text" id="shareLinkInput" readonly>
       <button class="icon-btn small" id="copyBtn" type="button">コピー</button>
-    </div>
-    <div class="danger-row">
-      <button class="danger-link" id="resetAllBtn" type="button">全データを削除してやり直す(全員に反映されます)</button>
     </div>
   </section>
 
@@ -1773,7 +1769,7 @@ function renderHistory(){
 
 function applyViewOnlyLock(){
   const controls = document.querySelectorAll(
-    '#seats select, #seats input, #rosterPanel input, #rosterPanel button, #rulesPanel input, #rulesPanel select, #recordBtn, #resetAllBtn, #riderRows select, #yakumanPlayer, #yakumanName, #yakumanMethod, #yakumanFrom, #addYakumanBtn, #yakumanRows button, #endTodayBtn'
+    '#seats select, #seats input, #rosterPanel input, #rosterPanel button, #rulesPanel input, #rulesPanel select, #recordBtn, #riderRows select, #yakumanPlayer, #yakumanName, #yakumanMethod, #yakumanFrom, #addYakumanBtn, #yakumanRows button, #endTodayBtn'
   );
   controls.forEach(el => { el.disabled = viewOnly; });
 }
@@ -1915,21 +1911,6 @@ document.getElementById('endTodayBtn').addEventListener('click', () => {
     saveLocal();
     render();
     toast('本日の成績をリセットしました');
-  }
-});
-
-// ---------- reset ----------
-document.getElementById('resetAllBtn').addEventListener('click', () => {
-  if(viewOnly) return;
-  if(confirm('ルール設定・メンバー・履歴をすべて削除します。よろしいですか?')){
-    state = freshState();
-    saveLocal();
-    writeConfigToInputs();
-    buildRosterRows();
-    buildSeats();
-    buildRiderRows(); buildYakumanRows();
-    render();
-    toast('すべてのデータを削除しました');
   }
 });
 
