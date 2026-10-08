@@ -715,6 +715,18 @@ fieldset{border:none;padding:0;margin:0;}
     </div>
   </div>
 
+  <section class="board today">
+    <div class="board-head">
+      <h2>本日の成績</h2>
+      <div style="display:flex;align-items:center;gap:.6rem;">
+        <span class="count" id="boardCountToday"></span>
+        <button class="today-end-btn" id="endTodayBtn" type="button">本日を終了</button>
+      </div>
+    </div>
+    <div id="leaderboardToday"></div>
+    <div class="settle-list" id="settleListToday"></div>
+  </section>
+
   <details class="history-wrap" id="historyPanel" open>
     <summary>
       <h2>履歴 <span class="count" id="historyCount"></span></h2>
@@ -762,18 +774,6 @@ fieldset{border:none;padding:0;margin:0;}
       <option value="人和"></option>
     </datalist>
     <div class="hint">役満が出たら記録しておけます(Naoの計算には影響しません)。履歴や成績にメモとして表示されます。</div>
-  </section>
-
-  <section class="board today">
-    <div class="board-head">
-      <h2>本日の成績</h2>
-      <div style="display:flex;align-items:center;gap:.6rem;">
-        <span class="count" id="boardCountToday"></span>
-        <button class="today-end-btn" id="endTodayBtn" type="button">本日を終了</button>
-      </div>
-    </div>
-    <div id="leaderboardToday"></div>
-    <div class="settle-list" id="settleListToday"></div>
   </section>
 
   <section class="board">
