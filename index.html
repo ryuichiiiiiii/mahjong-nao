@@ -526,7 +526,21 @@ details.rules[open] > summary .chev{transform:rotate(90deg);}
   padding:1.4rem 1.5rem;
   box-shadow:var(--shadow);
 }
-.history-wrap h2{font-family:var(--serif);font-size:1rem;font-weight:600;margin:0 0 1rem;color:var(--ink);}
+.history-wrap > summary{
+  list-style:none;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:1rem;
+}
+.history-wrap > summary::-webkit-details-marker{display:none;}
+.history-wrap > summary:focus-visible{outline:2px solid var(--felt-light);outline-offset:4px;border-radius:6px;}
+.history-wrap h2{font-family:var(--serif);font-size:1rem;font-weight:600;margin:0;color:var(--ink);}
+.history-wrap h2 .count{font-family:var(--sans);font-size:.78rem;font-weight:400;color:var(--ink-muted);margin-left:.4rem;}
+.history-wrap > summary .chev{transition:transform .18s ease;color:var(--ink-muted);}
+.history-wrap[open] > summary .chev{transform:rotate(90deg);}
+.history-wrap[open] > summary{margin-bottom:1rem;}
 .table-scroll{overflow-x:auto;}
 table.history{width:100%;border-collapse:collapse;font-size:.82rem;white-space:nowrap;}
 table.history th, table.history td{padding:.6rem .7rem;text-align:right;border-bottom:1px solid var(--line);vertical-align:top;}
@@ -702,8 +716,11 @@ fieldset{border:none;padding:0;margin:0;}
     </div>
   </div>
 
-  <section class="history-wrap">
-    <h2>履歴</h2>
+  <details class="history-wrap" id="historyPanel" open>
+    <summary>
+      <h2>履歴 <span class="count" id="historyCount"></span></h2>
+      <span class="chev">▸</span>
+    </summary>
     <div class="table-scroll">
       <table class="history" id="historyTable">
         <thead><tr><th>#</th><th>日時</th><th>結果</th><th>操作</th></tr></thead>
@@ -711,7 +728,7 @@ fieldset{border:none;padding:0;margin:0;}
       </table>
     </div>
     <div class="history-empty" id="historyEmpty">まだ記録がありません。半荘を入力して「記録する」を押してください。</div>
-  </section>
+  </details>
 
   <section class="riders-wrap">
     <div class="section-head">
@@ -1686,7 +1703,15 @@ function renderLeaderboard(){
   renderBoardRows(totalRows, leaderboardTotalEl);
 }
 
+const historyPanel = document.getElementById('historyPanel');
+const historyCountEl = document.getElementById('historyCount');
+try{ if(localStorage.getItem('jansou-nao-history-collapsed') === '1') historyPanel.open = false; }catch(e){}
+historyPanel.addEventListener('toggle', () => {
+  try{ localStorage.setItem('jansou-nao-history-collapsed', historyPanel.open ? '0' : '1'); }catch(e){}
+});
+
 function renderHistory(){
+  historyCountEl.textContent = state.history.length ? `${state.history.length} 半荘` : '';
   if(!state.history.length){
     historyTable.style.display = 'none';
     historyEmpty.style.display = 'block';
