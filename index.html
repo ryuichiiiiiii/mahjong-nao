@@ -297,6 +297,16 @@ details.rules[open] > summary .chev{transform:rotate(90deg);}
 }
 .warn.show{display:block;}
 .hint{font-size:.72rem;color:var(--ink-muted);margin-top:.2rem;}
+.hint-fold{margin-top:.6rem;}
+.hint-fold > summary{
+  list-style:none;cursor:pointer;
+  font-size:.74rem;color:var(--ink-muted);
+  display:inline-flex;align-items:center;gap:.3rem;
+}
+.hint-fold > summary::-webkit-details-marker{display:none;}
+.hint-fold > summary:focus-visible{outline:2px solid var(--felt-light);outline-offset:2px;border-radius:4px;}
+.hint-fold > summary .chev{display:inline-block;transition:transform .18s ease;}
+.hint-fold[open] > summary .chev{transform:rotate(90deg);}
 
 .rider-add{display:flex;gap:.5rem;margin-top:1.1rem;}
 .rider-add input[type=text]{
@@ -691,7 +701,10 @@ fieldset{border:none;padding:0;margin:0;}
       <h2>乗っかり</h2>
     </div>
     <div id="riderRows"></div>
+    <details class="hint-fold">
+    <summary><span class="chev">▸</span> 乗っかりのルール説明</summary>
     <div class="hint">今回対局していないメンバーが、4人のうち誰かに乗っかれます。乗った相手の今回のNaoをそのまま受け取り/支払いします。乗った相手が勝っていれば、その分は他の3人(および他に乗っかっている人)のうち負けている人が負け幅に応じて多く負担し(勝っている人の負担は0)、乗った相手が負けていれば逆に、他の3人(および他に乗っかっている人)のうち勝っている人が勝ち幅に応じて多く受け取ります(負けている人は関係なし)。乗っかっている人自身も、自分が乗っている相手の勝ち負けに応じて他の乗っかりの負担/受け取りに参加します。該当者がいない場合は全員で均等割りになります。5人目以降のメンバーは上の「メンバー管理」で登録してください。</div>
+    </details>
   </section>
 
   <details class="rules" id="rosterPanel">
