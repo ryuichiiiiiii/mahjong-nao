@@ -1665,7 +1665,8 @@ function renderBoardRows(rows, listEl, opts){
     const isChamp = pos === 0 && row.total > 0;
     const rankInner = isChamp ? `<img class="champ-photo" src="celebrate.png" alt="">` : String(pos+1);
     const yakumanBadge = row.yakuman ? ` · 🀄役満${row.yakuman}回` : '';
-    const bustBadge = opts.showBustCounts ? ` · 飛び${row.tobi}回 / 焼き鳥${row.yakitori}回` : '';
+    const bustBadge = opts.showBustCounts ? ` · 飛び${row.tobi}回 / 焼き鳥${row.yakitori}回`
+      : (opts.showTobiCount ? ` · 飛び${row.tobi}回` : '');
     return `
       <div class="rank-row ${isChamp ? 'first' : ''}">
         <div class="rank-num">${rankInner}</div>
@@ -1696,7 +1697,7 @@ function renderLeaderboard(){
 
   const totalRows = aggregateHistory(state.history);
   boardCountTotalEl.textContent = state.history.length ? `${state.history.length} 半荘` : 'まだ半荘の記録がありません';
-  renderBoardRows(totalRows, leaderboardTotalEl);
+  renderBoardRows(totalRows, leaderboardTotalEl, { showTobiCount: true });
 }
 
 const historyPanel = document.getElementById('historyPanel');
