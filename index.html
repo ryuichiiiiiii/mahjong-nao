@@ -1003,6 +1003,7 @@ let stateRef = null;
 let historyRef = null;
 let firebaseReady = false;
 let lastSyncedJSON = null;
+let knownHistoryLen = null;
 let pushTimer = null;
 
 function sharedSlice(){
@@ -1117,7 +1118,7 @@ function initFirebaseSync(){
     const seatFocused = document.activeElement && seatsEl.contains(document.activeElement);
     const rosterFocused = document.activeElement && rosterRowsEl.contains(document.activeElement);
     if(!rosterFocused) buildRosterRows();
-    if(!seatFocused) buildSeats();
+    if(!seatFocused) buildSeats(); else syncSeatDom();
     buildRiderRows(); buildYakumanRows();
     render();
   });
@@ -1132,8 +1133,11 @@ function initFirebaseSync(){
     });
     arr.sort((a,b) => new Date(a.at) - new Date(b.at));
     if(arr.length || Object.keys(map).length === 0){
+      const recordedElsewhere = knownHistoryLen !== null && arr.length > knownHistoryLen;
+      knownHistoryLen = arr.length;
       state.history = arr;
       persistLocal();
+      if(recordedElsewhere) refreshInputsAfterRecord();
       render();
     }
   });
@@ -1359,6 +1363,32 @@ function buildSeats(){
     inp.addEventListener('input', onFieldChange);
   });
   applyViewOnlyLock();
+}
+
+// While a seat input has focus the remote-sync listener can't rebuild the
+// seat DOM (that would steal focus and close the keyboard), so values that
+// changed remotely are pushed into the existing inputs in place instead.
+// The focused input itself is left alone — it's what the user is typing.
+function syncSeatDom(){
+  seatsEl.querySelectorAll('input[data-field]').forEach(inp => {
+    if(inp === document.activeElement) return;
+    const cur = state.current[+inp.dataset.idx];
+    if(!cur) return;
+    if(inp.dataset.field === 'score') inp.value = cur.score;
+    else inp.checked = !!cur[inp.dataset.field];
+  });
+}
+// A hanchan got recorded on another device, which resets the shared input
+// state. That's a deliberate "start over" moment, so unlike an ordinary
+// remote edit it's allowed to drop focus and rebuild the inputs outright —
+// otherwise a device whose focus is parked in a score field keeps showing
+// the previous hanchan's scores.
+function refreshInputsAfterRecord(){
+  if(editingId !== null) return; // mid-edit here: our inputs are ours
+  const ae = document.activeElement;
+  if(ae && seatsEl.contains(ae) && ae.blur) ae.blur();
+  buildSeats();
+  buildRiderRows(); buildYakumanRows();
 }
 
 function onFieldChange(e){
